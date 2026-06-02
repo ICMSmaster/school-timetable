@@ -1,0 +1,22 @@
+{
+  "theme_color": "#1c1c1e",
+  "background_color": "#f8f9fa",
+  "display": "standalone",
+  "scope": "/",
+  "start_url": "/",
+  "name": "우리학교 인터랙션 시간표",
+  "short_name": "학교시간표",
+  "description": "구글 시트 연동 실시간 모바일 시간표 앱",
+  "icons": [
+    {
+      "src": "/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
