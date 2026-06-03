@@ -1,4 +1,3 @@
-// src/app/student/[id]/TimelineContainer.tsx
 "use client";
 
 import { useState, useEffect, useRef } from "react";
@@ -12,6 +11,13 @@ interface TimelineItem {
   location: string;
 }
 
+// 📢 알림장 아이템 타입 정의
+interface NoticeItem {
+  target: string;
+  teacher: string;
+  content: string;
+}
+
 interface ContainerProps {
   studentId: string;
   studentName: string;
@@ -20,6 +26,7 @@ interface ContainerProps {
   initialPeriod: string;
   selectedDay: string;
   DAYS: string[];
+  notices: NoticeItem[]; // 👈 구글 시트에서 넘어온 알림장 데이터를 받도록 추가!
 }
 
 export default function TimelineContainer({
@@ -30,6 +37,7 @@ export default function TimelineContainer({
   initialPeriod,
   selectedDay,
   DAYS,
+  notices, // 👈 구조 분해 할당에도 추가!
 }: ContainerProps) {
   const router = useRouter();
   
@@ -61,10 +69,26 @@ export default function TimelineContainer({
         setProgress(Math.round(pct));
       }
 
-      // 수업 종료까지 남은 시간 간이 카운트다운
-      const remainingMin = 50 - (minutes % 60);
-      if (remainingMin > 0 && remainingMin <= 50 && hours >= 9 && hours < 17) {
-        setTimeLeft(`종료까지 ${remainingMin}분`);
+      // 🎯 [타이머 버그 전면 수정] 하드코딩을 지우고 현재 교시의 진짜 종료 시간과 대조합니다.
+      const periodsTime = [
+        { name: "1교시", end: 9 * 60 + 30 },
+        { name: "2교시", end: 10 * 60 + 30 },
+        { name: "3교시", end: 11 * 60 + 30 },
+        { name: "4교시", end: 12 * 60 + 30 },
+        { name: "5교시", end: 14 * 60 + 25 },
+        { name: "6교시", end: 15 * 60 + 25 },
+        { name: "7교시", end: 16 * 60 + 30 },
+      ];
+
+      const activePeriod = periodsTime.find(p => p.name === initialPeriod);
+      
+      if (activePeriod) {
+        const remainingMin = activePeriod.end - totalMinutes;
+        if (remainingMin > 0) {
+          setTimeLeft(`종료까지 ${remainingMin}분`);
+        } else {
+          setTimeLeft("");
+        }
       } else {
         setTimeLeft("");
       }
@@ -73,7 +97,7 @@ export default function TimelineContainer({
     updateTimeAndProgress();
     const interval = setInterval(updateTimeAndProgress, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [initialPeriod]);
 
   // 🔄 2. 1분 주기로 백그라운드 데이터 자동 리프레시 (실시간 교시 이동)
   useEffect(() => {
@@ -275,8 +299,46 @@ export default function TimelineContainer({
         )}
       </div>
 
-      {/* 3. 상황별 인지 하단 바 */}
-      <div className="w-full max-w-md px-5 mt-6">
+      {/* 🎯 3. [새로 장착 완료] 오늘의 알림장 UI 영역 */}
+      <div className="w-full max-w-md px-5 mt-4">
+        <div className="bg-white dark:bg-[#2C2C2E] p-6 rounded-[28px] border border-neutral-100 dark:border-neutral-800 shadow-sm">
+          <div className="flex items-center gap-2 mb-4">
+            <span className="text-lg">📢</span>
+            <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">오늘의 알림장</h3>
+          </div>
+
+          {notices && notices.length > 0 ? (
+            <div className="space-y-3.5">
+              {notices.map((notice, index) => (
+                <div key={index} className="p-3.5 bg-neutral-50 dark:bg-[#3A3A3C] rounded-2xl border border-neutral-100/50 dark:border-neutral-800">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      notice.target === "전체" 
+                        ? "bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400" 
+                        : "bg-purple-50 text-purple-600 dark:bg-purple-950/40 dark:text-purple-400"
+                    }`}>
+                      {notice.target === "전체" ? "전체공지" : "개인전달"}
+                    </span>
+                    <span className="text-xs font-medium text-gray-400 dark:text-gray-500">
+                      발송: {notice.teacher} 선생님
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap font-normal">
+                    {notice.content}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-6 text-sm text-neutral-400 dark:text-neutral-500 font-medium">
+              ✨ 등록된 알림장이 없습니다. 즐거운 하루!
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 4. 상황별 인지 하단 바 */}
+      <div className="w-full max-w-md px-5 mt-4">
         <div className="bg-white dark:bg-[#2C2C2E] border border-neutral-100 dark:border-neutral-800 p-4 rounded-2xl flex justify-between items-center shadow-sm">
           <div className="flex items-center gap-2">
             <span className={`h-1.5 w-1.5 rounded-full ${selectedDay === realToday ? "bg-green-500 animate-pulse" : "bg-neutral-300"}`}></span>
@@ -292,7 +354,7 @@ export default function TimelineContainer({
         </div>
       </div>
 
-      {/* 🎯 우측 하단 프리미엄 플로팅 액션 버튼 (FAB) */}
+      {/* 우측 하단 프리미엄 플로팅 액션 버튼 (FAB) */}
       {(showScrollTop || selectedDay !== realToday) && (
         <button
           onClick={scrollToCurrentFocus}
