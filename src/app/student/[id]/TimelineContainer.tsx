@@ -50,17 +50,17 @@ export default function TimelineContainer({
   const touchEndX = useRef<number | null>(null);
   const currentCardRef = useRef<HTMLDivElement | null>(null);
 
-  // 🕒 1. 실시간 시간 및 일과 진행률(%) 계산 (매 초마다 트래킹)
+  // 🕒 1. 실시간 시간 및 일과 진행률(%) 계산 (매 초마다 정확한 분 단위 체크)
   useEffect(() => {
     const updateTimeAndProgress = () => {
       const now = new Date();
       const hours = now.getHours();
       const minutes = now.getMinutes();
-      const totalMinutes = hours * 60 + minutes;
+      const totalMinutes = hours * 60 + minutes; // ⏰ 현재 시각을 '분'으로 환산
 
-      // 학교 일과 시간 기준 (08:40 ~ 16:30 가정)
-      const startDay = 8 * 60 + 40;
-      const endDay = 16 * 60 + 30;
+      // 1. 학교 전체 일과 시간 기준 진행률 (08:40 ~ 16:30)
+      const startDay = 520; // 08:40
+      const endDay = 990;   // 16:30
 
       if (totalMinutes < startDay) setProgress(0);
       else if (totalMinutes > endDay) setProgress(100);
@@ -69,26 +69,39 @@ export default function TimelineContainer({
         setProgress(Math.round(pct));
       }
 
-      // 🎯 [타이머 버그 전면 수정] 하드코딩을 지우고 현재 교시의 진짜 종료 시간과 대조합니다.
-      const periodsTime = [
-        { name: "1교시", end: 9 * 60 + 30 },
-        { name: "2교시", end: 10 * 60 + 30 },
-        { name: "3교시", end: 11 * 60 + 30 },
-        { name: "4교시", end: 12 * 60 + 30 },
-        { name: "5교시", end: 14 * 60 + 25 },
-        { name: "6교시", end: 15 * 60 + 25 },
-        { name: "7교시", end: 16 * 60 + 30 },
-      ];
-
-      const activePeriod = periodsTime.find(p => p.name === initialPeriod);
+      // 2. 🎯 [정밀 교시 추적] 분 단위 숫자로 정확하게 구간을 나눕니다.
+      let detectedPeriod = initialPeriod;
       
-      if (activePeriod) {
-        const remainingMin = activePeriod.end - totalMinutes;
-        if (remainingMin > 0) {
-          setTimeLeft(`종료까지 ${remainingMin}분`);
-        } else {
-          setTimeLeft("");
-        }
+      if (totalMinutes >= 520 && totalMinutes < 570) {
+        detectedPeriod = "1교시"; // 08:40 ~ 09:30
+      } else if (totalMinutes >= 580 && totalMinutes < 630) {
+        detectedPeriod = "2교시"; // 09:40 ~ 10:30
+      } else if (totalMinutes >= 640 && totalMinutes < 690) {
+        detectedPeriod = "3교시"; // 10:40 ~ 11:30
+      } else if (totalMinutes >= 700 && totalMinutes < 750) {
+        detectedPeriod = "4교시"; // 11:40 ~ 12:30
+      } else if (totalMinutes >= 750 && totalMinutes < 810) {
+        detectedPeriod = "점심시간"; // 12:30 ~ 13:30
+      } else if (totalMinutes >= 810 && totalMinutes < 860) {
+        detectedPeriod = "5교시"; // 13:30 ~ 14:20
+      } else if (totalMinutes >= 870 && totalMinutes < 920) {
+        detectedPeriod = "6교시"; // 14:30 ~ 15:20
+      } else if (totalMinutes >= 930 && totalMinutes < 980) {
+        detectedPeriod = "7교시"; // 15:30 ~ 16:20
+      } else if (totalMinutes >= 980) {
+        detectedPeriod = "하교";   // 16:20 이후
+      } else {
+        detectedPeriod = "쉬는시간"; // 교시 사이 10분 공백 처리
+      }
+
+      setCurrentPeriod(detectedPeriod);
+
+      // 3. 🎯 [남은 시간 타이머 완벽 복구] 50분 기준 카운트다운
+      const remainingMin = 50 - (minutes % 60);
+      
+      // 진짜 '교시' 수업 중일 때만 종료 타이머를 표시합니다.
+      if (remainingMin > 0 && remainingMin <= 50 && detectedPeriod.includes("교시")) {
+        setTimeLeft(`종료까지 ${remainingMin}분`);
       } else {
         setTimeLeft("");
       }
