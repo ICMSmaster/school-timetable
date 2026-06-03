@@ -1,6 +1,7 @@
 // src/app/student/[id]/page.tsx
 import { getCurrentPeriod, getCurrentDay } from "../../utils/time";
-import { getSheetData, parseDayTimeline } from "../../utils/google";
+// 1. getNoticeData를 추가로 import 합니다.
+import { getSheetData, parseDayTimeline, getNoticeData } from "../../utils/google";
 import TimelineContainer from "./TimelineContainer";
 
 interface Props {
@@ -47,8 +48,16 @@ export default async function StudentPage({ params, searchParams }: Props) {
   const isWeekend = realToday === "일" || realToday === "토";
   const selectedDay = resolvedSearchParams.day || (isWeekend ? "월" : realToday);
 
+  // 2. 시간표 데이터와 알림장 데이터를 동시에 가져옵니다.
   const rawData = await getSheetData(sheetName);
   const dayTimeline = parseDayTimeline(rawData || [], selectedDay) || [];
+  
+  const allNotices = await getNoticeData();
+  
+  // 3. 🎯 암시적 any 에러 방지를 위해 명시적으로 : any[] 처리 후 내 알림장만 필터링합니다.
+  const studentNotices: any[] = allNotices.filter(
+    (notice: any) => notice.target === "전체" || notice.target === sheetName
+  );
 
   return (
     <TimelineContainer
@@ -59,6 +68,7 @@ export default async function StudentPage({ params, searchParams }: Props) {
       initialPeriod={currentPeriod}
       selectedDay={selectedDay}
       DAYS={DAYS}
+      notices={studentNotices} // 👈 4. 드디어 짝을 맞춰 알림장 데이터를 배달합니다!
     />
   );
 }
