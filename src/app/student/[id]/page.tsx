@@ -1,6 +1,5 @@
 // src/app/student/[id]/page.tsx
 import { getCurrentPeriod, getCurrentDay } from "../../utils/time";
-// 1. getNoticeData를 추가로 import 합니다.
 import { getSheetData, parseDayTimeline, getNoticeData } from "../../utils/google";
 import TimelineContainer from "./TimelineContainer";
 
@@ -38,6 +37,8 @@ export default async function StudentPage({ params, searchParams }: Props) {
   }
 
   const studentName = sheetName.split("_")[1] || sheetName;
+  
+  // 🕒 매 요청마다 서버 갱신 시점의 최신 요일과 교시를 다시 계산합니다.
   const realToday = getCurrentDay(); 
   let currentPeriod = getCurrentPeriod();
   
@@ -48,13 +49,13 @@ export default async function StudentPage({ params, searchParams }: Props) {
   const isWeekend = realToday === "일" || realToday === "토";
   const selectedDay = resolvedSearchParams.day || (isWeekend ? "월" : realToday);
 
-  // 2. 시간표 데이터와 알림장 데이터를 동시에 가져옵니다.
+  // 구글 시트 연동 데이터 긁어오기
   const rawData = await getSheetData(sheetName);
   const dayTimeline = parseDayTimeline(rawData || [], selectedDay) || [];
   
   const allNotices = await getNoticeData();
   
-  // 3. 🎯 암시적 any 에러 방지를 위해 명시적으로 : any[] 처리 후 내 알림장만 필터링합니다.
+  // 알림장 대상 필터링
   const studentNotices: any[] = allNotices.filter(
     (notice: any) => notice.target === "전체" || notice.target === sheetName
   );
@@ -65,10 +66,10 @@ export default async function StudentPage({ params, searchParams }: Props) {
       studentName={studentName}
       initialTimeline={dayTimeline}
       realToday={realToday}
-      initialPeriod={currentPeriod}
+      initialPeriod={currentPeriod} // 👈 정확하게 연산된 실시간 교시가 클라이언트로 넘어갑니다.
       selectedDay={selectedDay}
       DAYS={DAYS}
-      notices={studentNotices} // 👈 4. 드디어 짝을 맞춰 알림장 데이터를 배달합니다!
+      notices={studentNotices} 
     />
   );
 }
