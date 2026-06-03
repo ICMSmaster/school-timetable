@@ -50,13 +50,13 @@ export default function TimelineContainer({
   const touchEndX = useRef<number | null>(null);
   const currentCardRef = useRef<HTMLDivElement | null>(null);
 
-  // 🕒 1. 실시간 시간 및 일과 진행률(%) 계산 (매 초마다 정확한 분 단위 체크)
+  // 🕒 1. 실시간 시간 및 일과 진행률(%) 계산 (학교 진짜 시간표 반영)
   useEffect(() => {
     const updateTimeAndProgress = () => {
       const now = new Date();
       const hours = now.getHours();
       const minutes = now.getMinutes();
-      const totalMinutes = hours * 60 + minutes; // ⏰ 현재 시각을 '분'으로 환산
+      const totalMinutes = hours * 60 + minutes; // 현재 시각을 '분'으로 환산
 
       // 1. 학교 전체 일과 시간 기준 진행률 (08:40 ~ 16:30)
       const startDay = 520; // 08:40
@@ -69,39 +69,44 @@ export default function TimelineContainer({
         setProgress(Math.round(pct));
       }
 
-      // 2. 🎯 [정밀 교시 추적] 분 단위 숫자로 정확하게 구간을 나눕니다.
+      // 2. 🎯 [진짜 학교 시간표 기준 교시 추적]
       let detectedPeriod = initialPeriod;
       
-      if (totalMinutes >= 520 && totalMinutes < 570) {
-        detectedPeriod = "1교시"; // 08:40 ~ 09:30
-      } else if (totalMinutes >= 580 && totalMinutes < 630) {
-        detectedPeriod = "2교시"; // 09:40 ~ 10:30
-      } else if (totalMinutes >= 640 && totalMinutes < 690) {
-        detectedPeriod = "3교시"; // 10:40 ~ 11:30
-      } else if (totalMinutes >= 700 && totalMinutes < 750) {
-        detectedPeriod = "4교시"; // 11:40 ~ 12:30
-      } else if (totalMinutes >= 750 && totalMinutes < 810) {
-        detectedPeriod = "점심시간"; // 12:30 ~ 13:30
-      } else if (totalMinutes >= 810 && totalMinutes < 860) {
-        detectedPeriod = "5교시"; // 13:30 ~ 14:20
-      } else if (totalMinutes >= 870 && totalMinutes < 920) {
-        detectedPeriod = "6교시"; // 14:30 ~ 15:20
-      } else if (totalMinutes >= 930 && totalMinutes < 980) {
-        detectedPeriod = "7교시"; // 15:30 ~ 16:20
-      } else if (totalMinutes >= 980) {
-        detectedPeriod = "하교";   // 16:20 이후
-      } else {
-        detectedPeriod = "쉬는시간"; // 교시 사이 10분 공백 처리
-      }
+      if (totalMinutes >= 520 && totalMinutes < 570) detectedPeriod = "1교시";       // 08:40 ~ 09:30
+      else if (totalMinutes >= 580 && totalMinutes < 630) detectedPeriod = "2교시";  // 09:40 ~ 10:30
+      else if (totalMinutes >= 640 && totalMinutes < 690) detectedPeriod = "3교시";  // 10:40 ~ 11:30
+      else if (totalMinutes >= 700 && totalMinutes < 750) detectedPeriod = "4교시";  // 11:40 ~ 12:30
+      else if (totalMinutes >= 750 && totalMinutes < 815) detectedPeriod = "점심시간"; // 12:30 ~ 13:35
+      else if (totalMinutes >= 815 && totalMinutes < 865) detectedPeriod = "5교시";  // 13:35 ~ 14:25
+      else if (totalMinutes >= 875 && totalMinutes < 925) detectedPeriod = "6교시";  // 14:35 ~ 15:25
+      else if (totalMinutes >= 940 && totalMinutes < 990) detectedPeriod = "7교시";  // 15:40 ~ 16:30
+      else if (totalMinutes >= 990) detectedPeriod = "하교"; // 16:30 이후
+      else detectedPeriod = "쉬는시간"; // 교시 사이 쉬는 시간 공백들
 
       setCurrentPeriod(detectedPeriod);
 
-      // 3. 🎯 [남은 시간 타이머 완벽 복구] 50분 기준 카운트다운
-      const remainingMin = 50 - (minutes % 60);
+      // 3. 🎯 [진짜 학교 시간표 기준 종료 타이머 계산]
+      let periodEndMinutes = 0;
       
-      // 진짜 '교시' 수업 중일 때만 종료 타이머를 표시합니다.
-      if (remainingMin > 0 && remainingMin <= 50 && detectedPeriod.includes("교시")) {
-        setTimeLeft(`종료까지 ${remainingMin}분`);
+      if (detectedPeriod === "1교시") periodEndMinutes = 570;       // 09:30
+      else if (detectedPeriod === "2교시") periodEndMinutes = 630;  // 10:30
+      else if (detectedPeriod === "3교시") periodEndMinutes = 690;  // 11:30
+      else if (detectedPeriod === "4교시") periodEndMinutes = 750;  // 12:30
+      else if (detectedPeriod === "점심시간") periodEndMinutes = 815; // 13:35
+      else if (detectedPeriod === "5교시") periodEndMinutes = 865;  // 14:25
+      else if (detectedPeriod === "6교시") periodEndMinutes = 925;  // 15:25
+      else if (detectedPeriod === "7교시") periodEndMinutes = 990;  // 16:30
+
+      // 남은 시간 계산 후 출력
+      if (periodEndMinutes > 0) {
+        const remainingMin = periodEndMinutes - totalMinutes;
+        if (remainingMin > 0) {
+          // 점심시간일 때는 '종료까지' 대신 '끝나기까지' 등으로 센스 있게 표기 가능합니다.
+          const label = detectedPeriod === "점심시간" ? "종료" : "종료";
+          setTimeLeft(`${label}까지 ${remainingMin}분`);
+        } else {
+          setTimeLeft("");
+        }
       } else {
         setTimeLeft("");
       }
