@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 // ⚡ 메타데이터 타입을 명시하고 하나로 합쳤습니다.
 export const metadata: Metadata = {
-  title: "인터랙션 학교 시간표",
+  title: "진해고등학교 학습도움실 지원서비스",
   description: "실시간 구글 시트 연동 타임라인",
   manifest: "/manifest.json", // PWA(앱 다운로드) 연결줄
 };

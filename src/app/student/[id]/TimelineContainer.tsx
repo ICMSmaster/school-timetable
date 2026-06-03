@@ -193,7 +193,7 @@ export default function TimelineContainer({
         <div className="flex justify-between items-end mb-5">
           <div>
             <div className="flex items-center gap-1.5 mb-1">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Interactive Timeline</span>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">[진해고등학교 학습도움실 지원서비스] 환영합니다!</span>
               {selectedDay === realToday && (
                 <span className="text-[10px] font-semibold text-blue-500 bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.5 rounded">
                   {progress}% 진행됨
