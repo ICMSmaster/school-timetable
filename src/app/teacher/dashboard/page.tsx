@@ -1,23 +1,10 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import Image from "next/image"; // 🖼️ Next.js 최적화 이미지 컴포넌트 로드
+import Image from "next/image";
+import Link from "next/link";
 
-// 🧑‍🏫 초기 교직원 기본 명부 세팅 (보안 등급 분류)
-const INITIAL_TEACHERS_REGISTRY = [
-  { name: "고장선", type: "특수담임", targetClass: "all" },
-  { name: "김다해", type: "특수담임", targetClass: "all" },
-  { name: "임선곤", type: "특수담임", targetClass: "all" },
-  { name: "서용환", type: "학년부장", targetClass: "all" },
-  { name: "김대홍", type: "원반담임", targetClass: "2-1" },
-  { name: "김수민", type: "원반담임", targetClass: "2-3" },
-  { name: "정은영", type: "원반담임", targetClass: "2-4" },
-  { name: "서한성", type: "원반담임", targetClass: "2-6" },
-  { name: "여지언", type: "원반담임", targetClass: "2-8" },
-  { name: "강지영", type: "원반담임", targetClass: "2-10" }
-];
-
-// 🎓 진해고등학교 2학년 특수학급 대상자 13명 정밀 데이터베이스
+// 🎓 진해고등학교 2학년 특수학급 대상자 정밀 데이터베이스
 const INITIAL_STUDENTS_DB = [
   { id: "20110", classCode: "2-1", name: "김한얼", period: "2교시", subject: "국어 (특수)", location: "도움반", status: "수업중", attendance: "출석" },
   { id: "20121", classCode: "2-1", name: "이정준", period: "2교시", subject: "진로와 직업", location: "컴퓨터실", status: "수업중", attendance: "출석" },
@@ -35,56 +22,97 @@ const INITIAL_STUDENTS_DB = [
 ];
 
 export default function TeacherDashboardPage() {
-  // --- 🔒 [보안 스토리지 컨트롤러] ---
+  // --- 🔒 [핵심 동적 레지스트리 스페이스] ---
+  const [teachers, setTeachers] = useState<Array<any>>([]);
   const [passwords, setPasswords] = useState<Record<string, string>>({});
   const [systemLogs, setSystemLogs] = useState<Array<{ id: number, time: string, msg: string, level: string }>>([]);
+  const [notices, setNotices] = useState<Array<any>>([]);
 
   const [currentTeacher, setCurrentTeacher] = useState<any | null>(null);
   const [loginId, setLoginId] = useState("");
   const [loginPw, setLoginPw] = useState("");
   const [loginError, setLoginError] = useState("");
 
-  // 🔑 신규 암호 설정 팝업 상태 트리거
+  // 일반 교사용 초기 비밀번호 변경 트리거
   const [isPasswordSetupMode, setIsPasswordSetupMode] = useState(false);
   const [pendingTeacher, setPendingTeacher] = useState<any>(null);
   const [newPasswordInput, setNewPasswordInput] = useState("");
 
-  // 일과 관리 상태 스페이스
+  // 개발자 계정(민석준) 전용 신규 계정 생성 Form 상태
+  const [createTeacherName, setCreateTeacherName] = useState("");
+  const [createTeacherType, setCreateTeacherType] = useState("원반담임");
+  const [createTargetClass, setCreateTargetClass] = useState("2-1");
+
+  // 일과 관제 컨트롤 스페이스
   const [statusFilter, setStatusFilter] = useState<string>("전체");
   const [selectedStudent, setSelectedStudent] = useState<any | null>(null);
   const [studentFeeds, setStudentFeeds] = useState<Record<string, any>>({});
   const [newFeedText, setNewFeedText] = useState("");
   const [sharedMemo, setSharedMemo] = useState("📋 [특수학급 내부 기밀 인계사항]\n- 오승철 학생 소음 완화용 헤드셋 소지 필수.");
-  const [boardList, setBoardList] = useState([
-    { id: 1, author: "고장선", title: "2026학년도 상반기 개별화교육지원팀 협의 서식 공유", date: "06-14" }
-  ]);
-  const [newPostTitle, setNewPostTitle] = useState("");
   const [currentTime, setCurrentTime] = useState("");
 
-  // 로컬 스토리지 보안 장부 불러오기
+  // 마운트 시 브라우저 내부 스토리지 데이터 무결성 검증 및 로드
   useEffect(() => {
+    // 1. 교사 명부 복구 또는 초기화
+    const savedTeachers = localStorage.getItem("zh_teachers_registry");
+    let currentTeachersList = [];
+    if (savedTeachers) {
+      currentTeachersList = JSON.parse(savedTeachers);
+      setTeachers(currentTeachersList);
+    } else {
+      const defaultTeachers = [
+        { name: "고장선", type: "특수담임", targetClass: "all" },
+        { name: "김다해", type: "특수담임", targetClass: "all" },
+        { name: "임선곤", type: "특수담임", targetClass: "all" },
+        { name: "서용환", type: "학년부장", targetClass: "all" },
+        { name: "김대홍", type: "원반담임", targetClass: "2-1" },
+        { name: "김수민", type: "원반담임", targetClass: "2-3" },
+        { name: "정은영", type: "원반담임", targetClass: "2-4" },
+        { name: "서한성", type: "원반담임", targetClass: "2-6" },
+        { name: "여지언", type: "원반담임", targetClass: "2-8" },
+        { name: "강지영", type: "원반담임", targetClass: "2-10" }
+      ];
+      currentTeachersList = defaultTeachers;
+      setTeachers(defaultTeachers);
+      localStorage.setItem("zh_teachers_registry", JSON.stringify(defaultTeachers));
+    }
+
+    // 2. 패스워드 테이블 복구 또는 초기화
     const savedPws = localStorage.getItem("zh_secured_pws");
     if (savedPws) {
       setPasswords(JSON.parse(savedPws));
     } else {
       const initialMap: Record<string, string> = {};
-      INITIAL_TEACHERS_REGISTRY.forEach(t => { initialMap[t.name] = "1111"; });
-      initialMap["개발자"] = "9999"; // 마스터 개발자 비밀번호 고정
+      currentTeachersList.forEach((t: any) => { initialMap[t.name] = "1111"; });
+      initialMap["민석준"] = "msj2026!!@"; // 🔒 최고 개발자 고정 키 탑재
       setPasswords(initialMap);
       localStorage.setItem("zh_secured_pws", JSON.stringify(initialMap));
     }
 
+    // 3. 시스템 보안 코어 로그 복구
     const savedLogs = localStorage.getItem("zh_secured_logs");
     if (savedLogs) {
       setSystemLogs(JSON.parse(savedLogs));
     } else {
-      const initLog = [{ id: 1, time: "08:30:00", msg: "보안 코어 로깅 관제 모듈 시스템 기동 완료.", level: "SYSTEM" }];
+      const initLog = [{ id: 1, time: "08:30:00", msg: "민석준 개발자 인프라 보안 커널 기동 완료.", level: "SYSTEM" }];
       setSystemLogs(initLog);
       localStorage.setItem("zh_secured_logs", JSON.stringify(initLog));
     }
+
+    // 4. 공지사항 데이터 연동 복구
+    const savedNotices = localStorage.getItem("zh_advanced_notices");
+    if (savedNotices) {
+      setNotices(JSON.parse(savedNotices));
+    }
+
+    // 5. 로그인 기록 세션 유지 체크
+    const savedSession = localStorage.getItem("zh_current_teacher_session");
+    if (savedSession) {
+      setCurrentTeacher(JSON.parse(savedSession));
+    }
   }, []);
 
-  // 실시간 하이엔드 디지털 클록
+  // 실시간 시스템 디지털 타이머 크론
   useEffect(() => {
     const updateClock = () => {
       const now = new Date();
@@ -95,7 +123,6 @@ export default function TeacherDashboardPage() {
     return () => clearInterval(timer);
   }, []);
 
-  // 통합 로그 레코더 함수 (개발자 전용 아카이빙)
   const writeLog = (msg: string, level: string = "INFO") => {
     const now = new Date();
     const timeStr = now.toTimeString().split(" ")[0];
@@ -107,26 +134,31 @@ export default function TeacherDashboardPage() {
     });
   };
 
-  // 🔐 [보안 검증 통제 연산] 교사 로그인 처리
+  // 🔐 [보안 관문 라우팅 알고리즘]
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     const idInput = loginId.trim();
     const pwInput = loginPw.trim();
 
-    if (idInput === "개발자") {
-      if (pwInput === passwords["개발자"]) {
-        setCurrentTeacher({ name: "시스템개발자", type: "개발자", targetClass: "all" });
-        writeLog("시스템 개발자(Root) 권한 보안 우회 로그인 성공", "SECURE");
+    // 💻 최고 개발자 '민석준' 계정 특수 문자 매핑 우선 필터링
+    if (idInput === "민석준") {
+      const masterPassword = passwords["민석준"] || "msj2026!!@";
+      if (pwInput === masterPassword) {
+        const devSession = { name: "민석준", type: "개발자", targetClass: "all" };
+        setCurrentTeacher(devSession);
+        localStorage.setItem("zh_current_teacher_session", JSON.stringify(devSession));
+        writeLog("최고 개발자 민석준(Root) 하이패스 보안 서버 연동 승인 완료", "SECURE");
         setLoginError("");
       } else {
-        setLoginError("개발자 마스터 키 보안 코드가 일치하지 않습니다.");
+        setLoginError("민석준 최고 개발자 고유 보안 액세스 키코드가 불일치합니다.");
+        writeLog("무단 침입 경고: 외부 단말기로부터 민석준 계정 침입 시도 차단", "WARN");
       }
       return;
     }
 
-    const foundTeacher = INITIAL_TEACHERS_REGISTRY.find(t => t.name === idInput);
+    const foundTeacher = teachers.find(t => t.name === idInput);
     if (!foundTeacher) {
-      setLoginError("교직원 전산망에 등록되지 않은 성명입니다.");
+      setLoginError("교직원 인사 기록 명부에 등재되지 않은 성명입니다.");
       return;
     }
 
@@ -139,44 +171,130 @@ export default function TeacherDashboardPage() {
         setLoginError("");
       } else {
         setCurrentTeacher(foundTeacher);
-        writeLog(`[${foundTeacher.type}] ${foundTeacher.name} 교사 로그인 성공`, "AUTH");
+        localStorage.setItem("zh_current_teacher_session", JSON.stringify(foundTeacher));
+        writeLog(`[인증 성공] ${foundTeacher.type} - ${foundTeacher.name} 교사 포털 접속`, "AUTH");
         setLoginError("");
       }
     } else {
-      setLoginError("비밀번호가 올바르지 않습니다. 다시 입력해 주세요.");
-      writeLog(`[경고] ${idInput} 계정 비밀번호 인증 실패 감지`, "WARN");
+      setLoginError("비밀번호가 오치되었습니다. 전산실에 문의하십시오.");
+      writeLog(`[인증 실패] ${idInput} 교사 계정 비밀번호 오기 입력 발생`, "WARN");
     }
   };
 
-  // 🔑 [암호 변경 처리 함수] 숫자 4자리 검증 절차
+  // 일반 교사 전용 패스워드 최초 셋업
   const handleRegisterNewPassword = (e: React.FormEvent) => {
     e.preventDefault();
     if (!/^\d{4}$/.test(newPasswordInput)) {
-      alert("보안 오류: 비밀번호는 반드시 숫자 4자리여야 합니다.");
+      alert("규격 경고: 일반 교직원 패스워드는 숫자 4자리여야 합니다.");
       return;
     }
-
     const updatedPws = { ...passwords, [pendingTeacher.name]: newPasswordInput };
     setPasswords(updatedPws);
     localStorage.setItem("zh_secured_pws", JSON.stringify(updatedPws));
-
-    writeLog(`[보안성장] ${pendingTeacher.name} 교사 초기 비밀번호 변경 완료`, "SECURE");
+    writeLog(`[보안 승정] ${pendingTeacher.name} 교사 고유 패스워드 암호화 키 변환`, "SECURE");
     
     setCurrentTeacher(pendingTeacher);
+    localStorage.setItem("zh_current_teacher_session", JSON.stringify(pendingTeacher));
     setIsPasswordSetupMode(false);
     setNewPasswordInput("");
     setLoginId("");
     setLoginPw("");
   };
 
-  // 권한 기반 데이터 통제 레이어
+  const handleLogout = () => {
+    setCurrentTeacher(null);
+    localStorage.removeItem("zh_current_teacher_session");
+  };
+
+  // --- 💻 [민석준 마스터 권한 전용 핵심 제어 메커니즘 펑션군] ---
+  
+  // 1. [계정 생성 권한] 신규 교사 백본 인프라에 추가
+  const handleMasterCreateAccount = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!createTeacherName.trim()) return;
+    const name = createTeacherName.trim();
+    
+    if (teachers.some(t => t.name === name) || name === "민석준") {
+      alert("중복 오류: 전산망에 동일한 성명의 교직원이 이미 등록되어 있습니다.");
+      return;
+    }
+
+    const newTeacher = {
+      name,
+      type: createTeacherType,
+      targetClass: createTeacherType === "원반담임" ? createTargetClass : "all"
+    };
+
+    const updatedList = [...teachers, newTeacher];
+    const updatedPws = { ...passwords, [name]: "1111" }; // 초기 비밀번호 자동 인가
+
+    setTeachers(updatedList);
+    setPasswords(updatedPws);
+    localStorage.setItem("zh_teachers_registry", JSON.stringify(updatedList));
+    localStorage.setItem("zh_secured_pws", JSON.stringify(updatedPws));
+
+    writeLog(`[민석준 마스터 조치] 신규 교직원 [${name}] 계정 전산망 발급 성공 (초기비밀번호: 1111)`, "SECURE");
+    setCreateTeacherName("");
+  };
+
+  // 2. [계정 삭제 권한] 인사 전산망 영구 제명
+  const handleMasterDeleteAccount = (name: string) => {
+    if (name === "고장선") {
+      alert("통제 거부: 고장선 특수 마스터 교사는 시스템 보호 정책에 따라 임의 파기가 불가능합니다.");
+      return;
+    }
+    if (!confirm(`[경고] 정말로 ${name} 교사의 계정 및 보안 패스워드 노드를 파기하시겠습니까?`)) return;
+
+    const updatedList = teachers.filter(t => t.name !== name);
+    const updatedPws = { ...passwords };
+    delete updatedPws[name];
+
+    setTeachers(updatedList);
+    setPasswords(updatedPws);
+    localStorage.setItem("zh_teachers_registry", JSON.stringify(updatedList));
+    localStorage.setItem("zh_secured_pws", JSON.stringify(updatedPws));
+
+    writeLog(`[민석준 마스터 조치] [${name}] 교사 전산망에서 영구 제명 및 세션 메모리 파기`, "SECURE");
+  };
+
+  // 3. [등급 관리 및 권한 부여] 실시간 권한 동적 스위칭 트랜잭션
+  const handleMasterChangeRole = (name: string, newType: string, newClass: string) => {
+    const updatedList = teachers.map(t => {
+      if (t.name === name) {
+        return { ...t, type: newType, targetClass: newType === "원반담임" ? newClass : "all" };
+      }
+      return t;
+    });
+    setTeachers(updatedList);
+    localStorage.setItem("zh_teachers_registry", JSON.stringify(updatedList));
+    writeLog(`[민석준 마스터 조치] ${name} 교사 권한 등급 -> [${newType} (${newType === "원반담임" ? newClass : "all"})] 강제 재배정 완료`, "SECURE");
+  };
+
+  // 4. [ID/PW 관리 및 마스터 직접 수정] 비밀번호 즉시 변경
+  const handleMasterChangePassword = (name: string, targetPw: string) => {
+    if (!targetPw.trim()) return;
+    const updatedPws = { ...passwords, [name]: targetPw.trim() };
+    setPasswords(updatedPws);
+    localStorage.setItem("zh_secured_pws", JSON.stringify(updatedPws));
+    writeLog(`[민석준 마스터 조치] ${name} 교사의 인증 비밀번호를 [${targetPw.trim()}]으로 강제 변조 마스터 승인`, "SECURE");
+  };
+
+  // 5. [게시판 추가 및 삭제] 공지사항 인프라 강제 오버라이딩 원천 삭제
+  const handleMasterDeleteNotice = (id: number, title: string) => {
+    if (!confirm(`[포럼 인프라 통제] 해당 공지 글을 데이터베이스에서 원천 삭제하시겠습니까?\n글 제목: ${title}`)) return;
+    const updatedNotices = notices.filter(n => n.id !== id);
+    setNotices(updatedNotices);
+    localStorage.setItem("zh_advanced_notices", JSON.stringify(updatedNotices));
+    writeLog(`[민석준 마스터 조치] 공지사항 포럼 내 안건 고유 ID [${id}] 데이터 강제 파쇄 완료`, "SECURE");
+  };
+
+  // 권한 스코프별 데이터 매핑 연산 레이어
   const authorizedStudentsRaw = useMemo(() => {
     if (!currentTeacher) return [];
     if (currentTeacher.targetClass === "all") return INITIAL_STUDENTS_DB;
     return INITIAL_STUDENTS_DB.filter(s => s.classCode === currentTeacher.targetClass);
   }, [currentTeacher]);
 
-  // 📊 특수교사용 스코프 세이프 스탯 연산 (일반교사 뷰에서는 호출되지 않아 에러 없음)
   const specialTeacherStats = useMemo(() => {
     const total = authorizedStudentsRaw.length;
     const inDoum = authorizedStudentsRaw.filter(s => s.location === "도움반").length;
@@ -192,14 +310,6 @@ export default function TeacherDashboardPage() {
     return authorizedStudentsRaw;
   }, [authorizedStudentsRaw, statusFilter]);
 
-  const handleAddPost = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newPostTitle.trim() || !currentTeacher) return;
-    setBoardList([{ id: Date.now(), author: currentTeacher.name, title: newPostTitle, date: "오늘" }, ...boardList]);
-    writeLog(`[공유사항 등록] ${currentTeacher.name} 교직원 안건 발행`, "INFO");
-    setNewPostTitle("");
-  };
-
   const handleAddFeed = (studentId: string) => {
     if (!newFeedText.trim() || !currentTeacher) return;
     const roleString = currentTeacher.type === "원반담임" ? `${currentTeacher.targetClass} 담임` : currentTeacher.type;
@@ -210,40 +320,32 @@ export default function TeacherDashboardPage() {
       date: new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false })
     };
     setStudentFeeds({ ...studentFeeds, [studentId]: [...(studentFeeds[studentId] || []), newMsg] });
-    writeLog(`[연계피드 전송] ${currentTeacher.name} -> 학생 ID ${studentId} 메시지 라우팅`, "COMM");
+    writeLog(`[패킷 피드] ${currentTeacher.name} 교사 -> 학생 고유 노드 [${studentId}] 연계 지침 하향`, "COMM");
     setNewFeedText("");
   };
 
-  // --- 🔒 [로그인 관문 UI] ---
+  // --- 🔒 [게이트 UI 인터페이스] ---
   if (!currentTeacher) {
     return (
       <div className="min-h-screen bg-[#070913] flex items-center justify-center p-4 antialiased">
         {!isPasswordSetupMode ? (
           <div className="w-full max-w-md bg-[#0F1322]/90 backdrop-blur-3xl rounded-[32px] border border-slate-800/80 p-8 shadow-[0_30px_60px_rgba(0,0,0,0.6)]">
             <div className="flex flex-col items-center mb-6">
-              {/* 🏛️ 로그인 창 중앙 상단 학교 로고 배치 */}
               <div className="mb-4 bg-slate-900/40 p-3 rounded-2xl border border-slate-800">
-                <Image 
-                  src="/build_logo.png" 
-                  alt="진해고등학교 로고" 
-                  width={60} 
-                  height={60} 
-                  priority
-                  className="object-contain"
-                />
+                <Image src="/build_logo.png" alt="진해고등학교 로고" width={60} height={60} priority className="object-contain" />
               </div>
               <span className="text-[10px] tracking-widest bg-blue-500/10 text-blue-400 font-mono px-3 py-1 rounded-md border border-blue-500/20 mb-2">
-                HIGH SECURE INTRANET V5
+                HIGH SECURE INTRANET PROTOCOL V5
               </span>
               <h1 className="text-base font-bold text-white tracking-tight">진해고 특수학급 관제포털</h1>
-              <p className="text-xs text-slate-500 mt-1">인가된 교직원 성명 및 패스워드를 입력하십시오.</p>
+              <p className="text-xs text-slate-500 mt-1">인가된 계정 명칭과 기밀 패스워드를 입력하십시오.</p>
             </div>
 
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
                 <input
                   type="text"
-                  placeholder="교직원 성함 입력"
+                  placeholder="교직원 성함 또는 개발자 ID 입력"
                   value={loginId}
                   onChange={(e) => setLoginId(e.target.value)}
                   className="w-full px-4 py-3.5 bg-[#080A12] border border-slate-800 rounded-xl text-sm font-bold text-white focus:outline-none focus:border-blue-600 transition-all"
@@ -252,37 +354,37 @@ export default function TeacherDashboardPage() {
               <div>
                 <input
                   type="password"
-                  placeholder="비밀번호 입력 (초기 암호: 1111)"
+                  placeholder="비밀번호 기입"
                   value={loginPw}
-                  onChange={(e) => loginPw !== undefined ? setLoginPw(e.target.value) : null}
+                  onChange={(e) => setLoginPw(e.target.value)}
                   className="w-full px-4 py-3.5 bg-[#080A12] border border-slate-800 rounded-xl text-sm font-bold text-white focus:outline-none focus:border-blue-600 transition-all"
                 />
               </div>
               {loginError && <p className="text-xs font-semibold text-red-400 pl-1">✕ {loginError}</p>}
               
               <button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm py-3.5 rounded-xl transition-all shadow-md">
-                보안 서버 연동 로그인
+                보안 서버 통합 인증
               </button>
             </form>
           </div>
         ) : (
           <div className="w-full max-w-md bg-[#16120B] border border-amber-900/60 rounded-[32px] p-8 shadow-2xl">
             <div className="text-center mb-6">
-              <span className="text-[10px] font-mono bg-amber-500/10 text-amber-400 px-3 py-1 rounded border border-amber-500/20">PASSWORD SAFETY COMPLIANCE</span>
-              <h2 className="text-base font-bold text-white mt-3">[{pendingTeacher?.name}] 선생님, 보안 변경 안내</h2>
-              <p className="text-xs text-amber-200/60 mt-1">현재 초기 보안코드(1111) 상태입니다.<br />앞으로 사용할 **숫자 4자리**를 고유 등록해 주세요.</p>
+              <span className="text-[10px] font-mono bg-amber-500/10 text-amber-400 px-3 py-1 rounded border border-amber-500/20">SECURITY PROTOCOL VERIFICATION</span>
+              <h2 className="text-base font-bold text-white mt-3">[{pendingTeacher?.name}] 교사 암호화 갱신 조치</h2>
+              <p className="text-xs text-amber-200/60 mt-1">현재 일회용 기본 보안 코드 상태입니다.<br />앞으로 사용할 **독립 숫자 4자리**를 신규 할당해 주세요.</p>
             </div>
             <form onSubmit={handleRegisterNewPassword} className="space-y-4">
               <input
                 type="password"
                 maxLength={4}
-                placeholder="새로운 숫자 4자리 입력"
+                placeholder="지정용 숫자 4자리"
                 value={newPasswordInput}
                 onChange={(e) => setNewPasswordInput(e.target.value.replace(/[^0-9]/g, ""))}
                 className="w-full px-4 py-3.5 bg-[#080A12] border border-amber-900/40 rounded-xl text-center text-lg font-mono font-bold tracking-widest text-amber-300 focus:outline-none focus:border-amber-500"
               />
-              <button type="submit" className="w-full bg-amber-600 hover:bg-amber-500 text-black font-black text-xs py-3.5 rounded-xl tracking-wider uppercase transition-colors">
-                새로운 비밀번호 승인 및 마스터본 등록
+              <button type="submit" className="w-full bg-amber-600 hover:bg-amber-500 text-black font-black text-xs py-3.5 rounded-xl transition-colors">
+                보안 코드 할당 승인
               </button>
             </form>
           </div>
@@ -291,52 +393,179 @@ export default function TeacherDashboardPage() {
     );
   }
 
-  // --- 🛠️ 1. [개발자 관리 콘솔 시스템 뷰] ---
+  // --- 💻 1. [최고 개발자 민석준 전용 하이 테크니컬 마스터 커맨드 인프라] ---
   if (currentTeacher.type === "개발자") {
     return (
-      <div className="min-h-screen bg-[#05070B] text-emerald-400 font-mono p-6 selection:bg-emerald-500/20">
-        <header className="border-b border-emerald-900/60 pb-4 mb-6 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <Image src="/build_logo.png" alt="Logo" width={32} height={32} className="opacity-80" />
+      <div className="min-h-screen bg-[#04060A] text-slate-300 font-mono p-6 flex flex-col gap-6">
+        <header className="border-b border-slate-800 pb-4 flex justify-between items-center bg-[#0B0F19] p-4 rounded-2xl border border-slate-800/60 shadow-xl">
+          <div className="flex items-center gap-4">
+            <Image src="/build_logo.png" alt="Logo" width={40} height={40} className="object-contain" />
             <div>
-              <h1 className="text-base font-black tracking-tight text-white flex items-center gap-2">
-                ZH-INTRANET MASTER CONTROL CONSOLE
+              <h1 className="text-base font-black text-white tracking-wider flex items-center gap-2">
+                <span>ZH-INTRANET BACKBONE FULL CONTROL CENTER</span>
+                <span className="bg-red-500/10 text-red-400 border border-red-500/20 text-[10px] px-2 py-0.5 rounded font-bold animate-pulse">ROOT PRIVILEGE</span>
               </h1>
-              <p className="text-xs text-slate-500 mt-0.5">시스템 개발자 전용 DB 실시간 마스터 감사 모듈</p>
+              <p className="text-xs text-slate-500 mt-0.5">최고 시스템 아키텍트 : <span className="text-emerald-400 font-bold">민석준 (MSJ-2026)</span></p>
             </div>
           </div>
-          <button onClick={() => setCurrentTeacher(null)} className="bg-red-950/40 border border-red-900/50 text-red-400 font-bold px-4 py-1.5 rounded text-xs hover:bg-red-900/40 transition-all">
-            콘솔 안전 해제
-          </button>
+          <div className="flex items-center gap-4">
+            <span className="text-xs text-slate-400 font-bold font-mono bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-800">{currentTime}</span>
+            <Link href="/teacher/notice" className="bg-purple-900/50 hover:bg-purple-900 text-purple-300 border border-purple-800 px-4 py-1.5 rounded-xl text-xs font-bold transition-all">
+              📢 공지사항 전사 포럼 강제 진입
+            </Link>
+            <button onClick={handleLogout} className="bg-red-950/60 border border-red-900 text-red-400 font-bold px-4 py-1.5 rounded-xl text-xs hover:bg-red-900 transition-all">
+              커널 보안 로그아웃
+            </button>
+          </div>
         </header>
 
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-          <div className="bg-[#090F16] border border-emerald-950 rounded-2xl p-5 shadow-lg">
-            <h2 className="text-xs font-black tracking-wider text-white mb-4 border-b border-emerald-950 pb-2">🔑 교직원 계정별 암호 명부 (개발자 암호 복호화 뷰)</h2>
-            <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
-              {Object.entries(passwords).map(([name, pw]) => (
-                <div key={name} className="flex justify-between items-center text-xs bg-[#060A10] p-2.5 rounded border border-emerald-950/60">
-                  <span className="text-slate-400 font-bold">{name} 교사 계정</span>
-                  <span className="bg-emerald-950/60 px-2 py-0.5 rounded text-emerald-300 font-mono font-black border border-emerald-900/30">
-                    {pw === "1111" ? "⚠️ 초기 비밀번호" : `🔒 비밀번호: ${pw}`}
-                  </span>
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 flex-1">
+          {/* 좌측: 전산망 교직원 계정 생성 및 전반 제어 마스터 랙 */}
+          <div className="xl:col-span-2 flex flex-col gap-6">
+            {/* 계정 생성 모듈 */}
+            <div className="bg-[#0B101D] border border-slate-800/80 rounded-2xl p-5 shadow-lg">
+              <h2 className="text-xs font-black text-white mb-4 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                ➕ 신규 교직원 데이터 권한 계정 강제 생성 (USER PROVISIONING)
+              </h2>
+              <form onSubmit={handleMasterCreateAccount} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                <div>
+                  <label className="block text-[10px] text-slate-400 mb-1 font-bold">교직원 성명</label>
+                  <input type="text" required placeholder="예: 박민석" value={createTeacherName} onChange={(e) => setCreateTeacherName(e.target.value)} className="w-full px-3 py-2 bg-[#060913] border border-slate-800 rounded-xl text-xs text-white font-bold focus:outline-none focus:border-emerald-500" />
                 </div>
-              ))}
+                <div>
+                  <label className="block text-[10px] text-slate-400 mb-1 font-bold">교사 등급(권한)</label>
+                  <select value={createTeacherType} onChange={(e) => setCreateTeacherType(e.target.value)} className="w-full px-3 py-2 bg-[#060913] border border-slate-800 rounded-xl text-xs text-white font-bold">
+                    <option value="원반담임">원반담임 (일반통합)</option>
+                    <option value="특수담임">특수담임 (도움반마스터)</option>
+                    <option value="학년부장">학년부장 (통합관람)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] text-slate-400 mb-1 font-bold">배정 학급 (원반 해당)</label>
+                  <select value={createTargetClass} onChange={(e) => setCreateTargetClass(e.target.value)} disabled={createTeacherType !== "원반담임"} className="w-full px-3 py-2 bg-[#060913] border border-slate-800 rounded-xl text-xs text-white font-bold disabled:opacity-30">
+                    <option value="2-1">2학년 1반</option>
+                    <option value="2-3">2학년 3반</option>
+                    <option value="2-4">2학년 4반</option>
+                    <option value="2-6">2학년 6반</option>
+                    <option value="2-8">2학년 8반</option>
+                    <option value="2-10">2학년 10반</option>
+                  </select>
+                </div>
+                <button type="submit" className="bg-emerald-600 hover:bg-emerald-500 text-black font-black text-xs py-2.5 rounded-xl transition-all">
+                  전산망 원격 원장 주입
+                </button>
+              </form>
+            </div>
+
+            {/* 교직원 데이터 매트릭스 (수정/삭제/권한 스위칭 일체화) */}
+            <div className="bg-[#0B101D] border border-slate-800/80 rounded-2xl p-5 shadow-lg flex-1">
+              <h2 className="text-xs font-black text-white mb-3 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-blue-400"></span>
+                🔒 교직원 등급 관리 및 ID/PW 실시간 변조 인프라 (CREDENTIALS ENGINE)
+              </h2>
+              <div className="overflow-x-auto border border-slate-800 rounded-xl bg-[#060A13]">
+                <table className="w-full text-left border-collapse">
+                  <thead className="bg-[#111728] border-b border-slate-800 text-[10px] text-slate-400 font-bold">
+                    <tr>
+                      <th className="p-3">식별성명</th>
+                      <th className="p-3">인가 권한 등급 변환</th>
+                      <th className="p-3">배정 클래스 스코프</th>
+                      <th className="p-3">실시간 패스워드 직접 변조</th>
+                      <th className="p-3 text-center">원천 제명</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-xs text-slate-300 divide-y divide-slate-800/40">
+                    {teachers.map((t) => (
+                      <tr key={t.name} className="hover:bg-slate-900/40 transition-colors">
+                        <td className="p-3 font-bold text-white flex items-center gap-1">
+                          👤 {t.name}
+                        </td>
+                        <td className="p-3">
+                          <select value={t.type} onChange={(e) => handleMasterChangeRole(t.name, e.target.value, t.targetClass)} className="bg-[#0A0E1A] border border-slate-800 rounded px-2 py-1 text-[11px] font-bold text-slate-300">
+                            <option value="원반담임">원반담임</option>
+                            <option value="특수담임">특수담임</option>
+                            <option value="학년부장">학년부장</option>
+                          </select>
+                        </td>
+                        <td className="p-3">
+                          <select value={t.targetClass} disabled={t.type !== "원반담임"} onChange={(e) => handleMasterChangeRole(t.name, t.type, e.target.value)} className="bg-[#0A0E1A] border border-slate-800 rounded px-2 py-1 text-[11px] text-slate-400 disabled:opacity-20">
+                            <option value="all">all (전체개방)</option>
+                            <option value="2-1">2-1반 고정</option>
+                            <option value="2-3">2-3반 고정</option>
+                            <option value="2-4">2-4반 고정</option>
+                            <option value="2-6">2-6반 고정</option>
+                            <option value="2-8">2-8반 고정</option>
+                            <option value="2-10">2-10반 고정</option>
+                          </select>
+                        </td>
+                        <td className="p-3">
+                          <input type="text" placeholder={passwords[t.name] || "1111"} onChange={(e) => handleMasterChangePassword(t.name, e.target.value)} className="bg-[#05070D] border border-slate-800 rounded px-3 py-1 text-xs text-emerald-400 font-mono w-28 focus:border-emerald-500" />
+                        </td>
+                        <td className="p-3 text-center">
+                          <button onClick={() => handleMasterDeleteAccount(t.name)} className="text-red-500 hover:bg-red-950/40 px-2 py-1 rounded text-[11px] font-bold border border-transparent hover:border-red-900 transition-all">
+                            파기
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {/* 민석준 본인 계정 데이터 아웃라인 표시 */}
+                    <tr className="bg-purple-950/10">
+                      <td className="p-3 font-bold text-purple-400">👑 민석준 (본인)</td>
+                      <td className="p-3 text-slate-500 text-[11px]">최고 개발자 (SYSTEM)</td>
+                      <td className="p-3 text-slate-500 text-[11px]">all (전체 제어)</td>
+                      <td className="p-3 text-purple-300 font-mono text-[11px] pl-3">msj2026!!@ (암호화가드)</td>
+                      <td className="p-3 text-center text-slate-600 text-[10px]">파기불가</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
 
-          <div className="xl:col-span-2 bg-[#090F16] border border-emerald-950 rounded-2xl p-5 shadow-lg flex flex-col h-[560px]">
-            <h2 className="text-xs font-black tracking-wider text-white mb-3 border-b border-emerald-950 pb-2">🖥️ 실시간 인트라넷 코어 로그 스트림</h2>
-            <div className="flex-1 bg-[#04070B] p-4 rounded-xl font-mono text-[11px] leading-relaxed overflow-y-auto space-y-1.5 text-slate-400">
-              {systemLogs.map((log) => (
-                <div key={log.id} className="hover:bg-slate-900/40 py-0.5 rounded px-1 transition-colors">
-                  <span className="text-slate-600 mr-2">[{log.time}]</span>
-                  <span className={`font-bold mr-2 ${log.level === "SECURE" ? "text-blue-400" : log.level === "WARN" ? "text-red-400" : "text-emerald-500"}`}>[{log.level}]</span>
-                  <span>{log.msg}</span>
-                </div>
-              ))}
+          {/* 우측: 실시간 백본 로그 스트림 및 게시판 데이터 원천 조율 파쇄 랙 */}
+          <div className="flex flex-col gap-6">
+            {/* 게시판 인프라 파쇄 통제 모듈 */}
+            <div className="bg-[#0B101D] border border-slate-800/80 rounded-2xl p-5 shadow-lg flex flex-col h-[260px]">
+              <h2 className="text-xs font-black text-white mb-2 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+                💥 공지 협의 포럼 안건 원천 파쇄 통제 (BULLETIN TRASH)
+              </h2>
+              <div className="flex-1 overflow-y-auto space-y-2 pr-1 text-[11px]">
+                {notices.length === 0 ? (
+                  <p className="text-slate-600 font-bold text-center py-12">포럼 서버에 데이터가 분출되지 않았습니다.</p>
+                ) : (
+                  notices.map(n => (
+                    <div key={n.id} className="bg-[#060913] p-2 rounded-xl border border-slate-800/80 flex justify-between items-start gap-2">
+                      <div className="flex-1">
+                        <p className="text-slate-400 font-bold truncate">{n.title}</p>
+                        <p className="text-[10px] text-slate-600 mt-0.5">발행자: {n.author} 교사 | 타깃: [{n.visibleTo.join(", ")}]</p>
+                      </div>
+                      <button onClick={() => handleMasterDeleteNotice(n.id, n.title)} className="bg-red-950/40 border border-red-900/60 text-red-400 text-[10px] px-1.5 py-0.5 rounded hover:bg-red-900 transition-colors">
+                        파쇄
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
-            <button onClick={() => { setSystemLogs([]); localStorage.removeItem("zh_secured_logs"); }} className="mt-3 text-right text-[11px] text-slate-500 hover:text-slate-300">로그 버퍼 초기화</button>
+
+            {/* 실시간 백본 로그 스트림 */}
+            <div className="bg-[#0B101D] border border-slate-800/80 rounded-2xl p-5 shadow-lg flex-1 flex flex-col h-[300px]">
+              <h2 className="text-xs font-black text-white mb-3 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+                🖥️ 실시간 인트라넷 전산 백본 코어 로그 스트림
+              </h2>
+              <div className="flex-1 bg-[#04060B] p-4 rounded-xl font-mono text-[10px] leading-relaxed overflow-y-auto space-y-1.5 text-slate-400 border border-slate-900">
+                {systemLogs.map((log) => (
+                  <div key={log.id} className="hover:bg-slate-900/40 py-0.5 rounded px-1 transition-colors">
+                    <span className="text-slate-600 mr-2">[{log.time}]</span>
+                    <span className={`font-bold mr-1 ${log.level === "SECURE" ? "text-blue-400" : log.level === "WARN" ? "text-red-400" : "text-emerald-500"}`}>[{log.level}]</span>
+                    <span>{log.msg}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -349,14 +578,16 @@ export default function TeacherDashboardPage() {
       <div className="min-h-screen bg-[#070912] text-slate-200 antialiased flex flex-col font-sans">
         <header className="w-full bg-[#0E1220]/90 backdrop-blur-md px-8 py-3 flex justify-between items-center border-b border-slate-800/80 sticky top-0 z-40">
           <div className="flex items-center gap-3">
-            {/* 🏛️ 헤더 좌측에 학교 로고 탑재 */}
             <Image src="/build_logo.png" alt="진해고등학교" width={34} height={34} className="object-contain" />
             <h1 className="text-sm font-black text-white tracking-tight">진해고등학교 특수학급 통합행정관제시스템</h1>
           </div>
           <div className="flex items-center gap-4 text-xs font-bold">
             <span className="text-blue-400 font-mono bg-blue-950/50 px-3 py-1 rounded border border-blue-900/40">{currentTime}</span>
-            <span className="bg-slate-800/60 border border-slate-700/50 px-3 py-1 rounded-xl text-slate-300">🌟 도움반 마스터 전담교사: <span className="text-white font-extrabold">{currentTeacher.name}</span></span>
-            <button onClick={() => setCurrentTeacher(null)} className="text-slate-500 hover:text-red-400 transition-colors">시스템 로그아웃</button>
+            <Link href="/teacher/notice" className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-xl transition-all">
+              📢 공지 및 업무협의 포럼 이동
+            </Link>
+            <span className="bg-slate-800/60 border border-slate-700/50 px-3 py-1 rounded-xl text-slate-300">🌟 특수교사: <span className="text-white font-extrabold">{currentTeacher.name}</span></span>
+            <button onClick={handleLogout} className="text-slate-500 hover:text-red-400 transition-colors">시스템 로그아웃</button>
           </div>
         </header>
 
@@ -382,9 +613,7 @@ export default function TeacherDashboardPage() {
             </div>
 
             <div className="bg-[#101426] border border-slate-800/80 rounded-[24px] p-6 shadow-xl">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-sm font-bold text-white">🕹️ 실시간 특수학급 대상자 다차원 트래킹 매트릭스</h2>
-              </div>
+              <h2 className="text-sm font-bold text-white mb-4">🕹️ 실시간 특수학급 대상자 다차원 트래킹 매트릭스</h2>
               <div className="overflow-hidden border border-slate-800/60 rounded-xl bg-[#090C16]">
                 <table className="w-full text-left border-collapse">
                   <thead className="bg-[#151A30] border-b border-slate-800 text-[11px] text-slate-400 font-bold">
@@ -412,26 +641,10 @@ export default function TeacherDashboardPage() {
                 </table>
               </div>
             </div>
-
-            <div className="bg-[#101426] border border-slate-800/80 rounded-[24px] p-6">
-              <h2 className="text-sm font-bold text-white mb-4">📂 특수학급 교무 협의 내부 아카이브</h2>
-              <form onSubmit={handleAddPost} className="flex gap-2 mb-4">
-                <input type="text" placeholder="공유할 안건 핵심 헤드라인 기입..." value={newPostTitle} onChange={(e) => setNewPostTitle(e.target.value)} className="flex-1 px-4 py-2 bg-[#090C16] border border-slate-800 rounded-xl text-xs" />
-                <button type="submit" className="bg-blue-600 text-white font-bold text-xs px-4 py-2 rounded-xl">기록 등록</button>
-              </form>
-              <div className="divide-y divide-slate-800 rounded-xl overflow-hidden bg-[#090C16]">
-                {boardList.map(p => (
-                  <div key={p.id} className="p-3 text-xs flex justify-between items-center hover:bg-slate-800/30">
-                    <div className="flex gap-3"><span className="text-slate-400 font-bold w-12">{p.author}</span><p className="text-slate-200 font-medium">{p.title}</p></div>
-                    <span className="text-[10px] font-mono text-slate-500">{p.date}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
 
-          <section className="bg-[#1A140E] border border-amber-950 rounded-[24px] p-6 flex flex-col min-h-[500px]">
-            <h2 className="text-sm font-bold text-amber-300 mb-2 flex items-center gap-2"><span>✍️</span>학습도움실 교사 일간 정밀 인계록</h2>
+          <section className="bg-[#1A140E] border border-amber-950 rounded-[24px] p-6 flex flex-col min-h-[400px]">
+            <h2 className="text-sm font-bold text-amber-300 mb-2 flex items-center gap-2"><span>✍--- 교사 일간 정밀 인계록</span></h2>
             <textarea value={sharedMemo} onChange={(e) => setSharedMemo(e.target.value)} className="flex-1 w-full bg-[#0A0806] border border-amber-950/60 rounded-2xl p-4 text-xs text-amber-100 font-medium resize-none focus:outline-none" />
           </section>
         </main>
@@ -439,20 +652,22 @@ export default function TeacherDashboardPage() {
     );
   }
 
-  // --- 📋 3. [일반 통합 원반담임 및 학년부장 전용 (협업 미니멀리즘 뷰)] ---
+  // --- 📋 3. [일반 통합 원반담임 및 학년부장 전용 뷰] ---
   return (
     <div className="min-h-screen bg-[#0A0C14] text-slate-300 flex flex-col font-sans antialiased">
       <header className="w-full bg-[#111422] border-b border-slate-800/80 px-8 py-3 flex justify-between items-center">
         <div className="flex items-center gap-3">
-          {/* 🏛️ 일반 교사 헤더 좌측에도 학교 로고 배치 */}
           <Image src="/build_logo.png" alt="진해고등학교" width={32} height={32} className="object-contain" />
           <h1 className="text-sm font-bold text-white">
             {currentTeacher.type === "원반담임" ? `진해고등학교 [${currentTeacher.targetClass} 학급 지원 포털]` : "진해고등학교 [학년부장 통합 관제 포털]"}
           </h1>
         </div>
         <div className="flex items-center gap-4 text-xs">
+          <Link href="/teacher/notice" className="bg-[#1D2235] hover:bg-slate-700 border border-slate-700 px-3 py-1.5 rounded-xl text-slate-300 transition-all">
+            📢 업무 협의·공지사항 포럼
+          </Link>
           <span className="bg-slate-900 border border-slate-800 px-3 py-1 rounded text-slate-400">{currentTeacher.name} 선생님 접속중</span>
-          <button onClick={() => setCurrentTeacher(null)} className="text-slate-500 hover:text-red-400">안전 로그아웃</button>
+          <button onClick={handleLogout} className="text-slate-500 hover:text-red-400">안전 로그아웃</button>
         </div>
       </header>
 
@@ -460,7 +675,7 @@ export default function TeacherDashboardPage() {
         <div className="bg-[#111422] border border-slate-800 rounded-3xl p-6 shadow-xl">
           <div className="mb-4">
             <h2 className="text-sm font-bold text-white">📋 실시간 배정 특수학급 대상자 현황</h2>
-            <p className="text-xs text-slate-500 mt-0.5">학생 행을 마우스로 클릭하면 도움반 교직원 전용 **[1:1 연계 대화 및 협조 소통 다이어리]** 피드가 오픈됩니다.</p>
+            <p className="text-xs text-slate-500 mt-0.5">학생 행을 클릭하면 도움반 교직원 간의 **[1:1 소통 협조 소통 다이어리]** 피드가 기동됩니다.</p>
           </div>
 
           <div className="overflow-hidden border border-slate-800/60 rounded-xl bg-[#0B0D16]">
@@ -500,31 +715,16 @@ export default function TeacherDashboardPage() {
             </table>
           </div>
         </div>
-
-        {/* 🔒 안전한 장막 보안 블러 처리 가동 */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 opacity-20 pointer-events-none select-none relative">
-          <div className="absolute inset-0 z-10 flex items-center justify-center font-bold text-xs bg-[#0A0C14]/80 text-red-400">
-            🔒 특수학급 교사 전용 기밀 정보 영역 (원반담임 및 학년부장 보안 격리됨)
-          </div>
-          <div className="bg-[#111422] border border-slate-800 rounded-2xl p-4">
-            <h3 className="text-xs font-bold text-slate-500 mb-2">교무 공유 협의록</h3>
-            <div className="w-full h-20 bg-slate-900 rounded-xl" />
-          </div>
-          <div className="bg-[#111422] border border-slate-800 rounded-2xl p-4">
-            <h3 className="text-xs font-bold text-slate-500 mb-2">도움반 내부 인계록</h3>
-            <div className="w-full h-20 bg-slate-900 rounded-xl" />
-          </div>
-        </div>
       </main>
 
-      {/* 🔮 [상호 전달 및 소통 피드 멀티 카드 구조 모달] */}
+      {/* 🔮 [상호 소통 대화창 모달 컴포넌트] */}
       {selectedStudent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div className="bg-[#111422] border border-slate-800 w-full max-w-xl rounded-3xl p-6 shadow-2xl relative flex flex-col max-h-[85vh]">
             <button onClick={() => setSelectedStudent(null)} className="absolute top-4 right-4 text-slate-400 hover:text-white">✕</button>
             <div className="mb-3">
-              <span className="text-[10px] uppercase font-mono bg-blue-900/40 text-blue-400 px-2.5 py-0.5 rounded border border-blue-900/30">{selectedStudent.classCode}반 통합 관리</span>
-              <h3 className="text-base font-bold text-white mt-1">{selectedStudent.name} 학생 통합 전달 연계 대화함</h3>
+              <span className="text-[10px] uppercase font-mono bg-blue-900/40 text-blue-400 px-2.5 py-0.5 rounded border border-blue-900/30">{selectedStudent.classCode}반 관제</span>
+              <h3 className="text-base font-bold text-white mt-1">{selectedStudent.name} 학생 연계 소통 피드</h3>
             </div>
 
             <div className="flex-1 overflow-y-auto space-y-3 bg-[#0B0D16] p-4 rounded-xl border border-slate-800 min-h-[180px] mb-4">
@@ -548,18 +748,14 @@ export default function TeacherDashboardPage() {
             <div className="flex gap-2">
               <input 
                 type="text" 
-                placeholder={currentTeacher.type === "학년부장" ? "학년부장교사는 조회 전용 모드로 입력이 제한됩니다." : "도움반/담임 교사에게 실시간 전달할 협조 사항 기입..."} 
+                placeholder={currentTeacher.type === "학년부장" ? "학년부장교사는 조회 전용 모드로 제한됩니다." : "도움반/담임 교사에게 실시간 전달할 지침 기입..."} 
                 disabled={currentTeacher.type === "학년부장"}
                 value={newFeedText}
                 onChange={(e) => setNewFeedText(e.target.value)}
                 onKeyDown={(e) => { if(e.key === 'Enter') handleAddFeed(selectedStudent.id); }}
                 className="flex-1 px-4 py-2.5 bg-[#0B0D16] border border-slate-800 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 disabled:opacity-40" 
               />
-              <button 
-                onClick={() => handleAddFeed(selectedStudent.id)} 
-                disabled={currentTeacher.type === "학년부장"}
-                className="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl disabled:bg-slate-800"
-              >
+              <button onClick={() => handleAddFeed(selectedStudent.id)} disabled={currentTeacher.type === "학년부장"} className="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl disabled:bg-slate-800">
                 전달
               </button>
             </div>
