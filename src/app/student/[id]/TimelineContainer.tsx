@@ -21,9 +21,9 @@ interface ContainerProps {
   studentId: string;
   studentName: string;
   initialTimeline: TimelineItem[];
-  realToday: string;
+  realToday: string; // 예: "월" 또는 "월요일"
   initialPeriod: string;
-  selectedDay: string;
+  selectedDay: string; // 예: "월" 또는 "월요일"
   DAYS: string[];
   notices: NoticeItem[];
 }
@@ -45,33 +45,47 @@ export default function TimelineContainer({
   const [progress, setProgress] = useState<number>(0);
   const [showScrollTop, setShowScrollTop] = useState<boolean>(false);
 
-  // 🎯 [팝업창 상태 관리] 처음 접속 시 팝업을 열어줍니다.
-  const [showPopup, setShowPopup] = useState<boolean>(true);
+  // 팝업 메시지 상태 관리
   const [popupMessage, setPopupMessage] = useState<string>("");
+  
+  // 💡 [버그 해결] 최초 접속 시에만 딱 한 번 팝업을 띄우기 위한 flag 상태
+  const [hasOpenedPopup, setHasOpenedPopup] = useState<boolean>(false);
+  const [showPopup, setShowPopup] = useState<boolean>(false);
 
+  // 스와이프 조례용 터치 위치 추적 Ref
   const touchStartX = useRef<number | null>(null);
   const touchEndX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
   const currentCardRef = useRef<HTMLDivElement | null>(null);
 
-  // 🕒 1. 실시간 시간 및 일과 진행률(%) 계산 (학교 진짜 시간표 반영 + 주말/조례 완벽 반영)
+  // 💡 [버그 해결] 글자 수 불일치("월" vs "월요일") 우려를 완전히 없애기 위해 첫 글자만 따서 비교합니다.
+  const isTodayActive = selectedDay?.charAt(0) === realToday?.charAt(0);
+
+  // 🕒 1. 실시간 시간 및 일과 진행률(%) 계산 (주말/조례 예외 처리 포함)
   useEffect(() => {
     const updateTimeAndProgress = () => {
       const now = new Date();
       const dayOfWeek = now.getDay(); // 0: 일요일, 6: 토요일
       const hours = now.getHours();
       const minutes = now.getMinutes();
-      const totalMinutes = hours * 60 + minutes; // 현재 시각을 '분'으로 환산
+      const totalMinutes = hours * 60 + minutes;
 
-      // 🚨 [주말 예외 처리] 토요일(6) 또는 일요일(0)인 경우
+      // 🚨 [주말 예외 처리] 토요일(6) 또는 일요일(0)인 경우 즉시 주말 모드
       if (dayOfWeek === 0 || dayOfWeek === 6) {
         setProgress(0);
         setCurrentPeriod("주말");
         setPopupMessage("🌿 오늘은 즐거운 주말입니다! 일주일 동안 쌓인 피로를 풀고 편안한 휴식을 취하세요. 충전 완료! 💪");
         setTimeLeft("");
+        
+        // 오늘이 진짜 주말이고 아직 팝업을 보여준 적이 없다면 최초 1회만 오픈
+        if (!hasOpenedPopup) {
+          setShowPopup(true);
+          setHasOpenedPopup(true);
+        }
         return; 
       }
 
-      // 1. 평일 학교 전체 일과 시간 기준 진행률 (08:40 ~ 16:30)
+      // 평일 학교 전체 일과 시간 기준 진행률 (08:40 ~ 16:30)
       const startDay = 520; // 08:40
       const endDay = 990;   // 16:30
 
@@ -82,32 +96,31 @@ export default function TimelineContainer({
         setProgress(Math.round(pct));
       }
 
-      // 2. 🎯 [진짜 학교 시간표 기준 교시 및 팝업 메시지 정밀 추적]
+      // 🎯 [학교 시간표 기준 교시 및 팝업 메시지 정밀 추적]
       let detectedPeriod = initialPeriod;
       let message = "";
       
-      // 💡 08:30 ~ 08:40 담임 조례 시간 추가
       if (totalMinutes >= 510 && totalMinutes < 520) {
-        detectedPeriod = "조례";
-        message = "📋 지금은 담임선생님과의 조례 시간입니다. 오늘 하루 일정을 체크하고 힘차게 시작해 봐요! ✨";
+        detectedPeriod = "담임조례";
+        message = "📋 지금은 담임 조례 시간입니다. 오늘 하루 일정을 체크하고 힘차게 시작해 봐요! ✨";
       } else if (totalMinutes >= 520 && totalMinutes < 570) {
         detectedPeriod = "1교시";
         message = "지금은 📝 1교시 수업 시간입니다.";
       } else if (totalMinutes >= 570 && totalMinutes < 580) {
         detectedPeriod = "쉬는시간";
-        message = "지금은 ☕ 1교시 쉬는 시간입니다. 2교시 수업을 준비하세요!";
+        message = "지금은 ☕ 1교시 쉬는 시간입니다. 다음 수업을 준비하세요!";
       } else if (totalMinutes >= 580 && totalMinutes < 630) {
         detectedPeriod = "2교시";
         message = "지금은 📝 2교시 수업 시간입니다.";
       } else if (totalMinutes >= 630 && totalMinutes < 640) {
         detectedPeriod = "쉬는시간";
-        message = "지금은 ☕ 2교시 쉬는 시간입니다. 3교시 수업을 준비하세요!";
+        message = "지금은 ☕ 2교시 쉬는 시간입니다. 다음 수업을 준비하세요!";
       } else if (totalMinutes >= 640 && totalMinutes < 690) {
         detectedPeriod = "3교시";
         message = "지금은 📝 3교시 수업 시간입니다.";
       } else if (totalMinutes >= 690 && totalMinutes < 700) {
         detectedPeriod = "쉬는시간";
-        message = "지금은 ☕ 3교시 쉬는 시간입니다. 4교시 수업을 준비하세요!";
+        message = "지금은 ☕ 3교시 쉬는 시간입니다. 다음 수업을 준비하세요!";
       } else if (totalMinutes >= 700 && totalMinutes < 750) {
         detectedPeriod = "4교시";
         message = "지금은 📝 4교시 수업 시간입니다.";
@@ -119,13 +132,13 @@ export default function TimelineContainer({
         message = "지금은 📝 5교시 수업 시간입니다.";
       } else if (totalMinutes >= 865 && totalMinutes < 875) {
         detectedPeriod = "쉬는시간";
-        message = "지금은 ☕ 5교시 쉬는 시간입니다. 6교시 수업을 준비하세요!";
+        message = "지금은 ☕ 5교시 쉬는 시간입니다. 다음 수업을 준비하세요!";
       } else if (totalMinutes >= 875 && totalMinutes < 925) {
         detectedPeriod = "6교시";
         message = "지금은 📝 6교시 수업 시간입니다.";
       } else if (totalMinutes >= 925 && totalMinutes < 940) {
         detectedPeriod = "쉬는시간";
-        message = "지금은 ☕ 6교시 쉬는 시간입니다. 7교시 수업을 준비하세요!";
+        message = "지금은 ☕ 6교시 쉬는 시간입니다. 다음 수업을 준비하세요!";
       } else if (totalMinutes >= 940 && totalMinutes < 990) {
         detectedPeriod = "7교시";
         message = "지금은 📝 7교시 수업 시간입니다.";
@@ -140,9 +153,15 @@ export default function TimelineContainer({
       setCurrentPeriod(detectedPeriod);
       setPopupMessage(message);
 
-      // 3. 진짜 학교 시간표 기준 종료 타이머 계산
+      // 💡 [버그 해결] 앱 로딩 후 안내 메시지가 생성되면 최초 1회만 팝업 노출
+      if (!hasOpenedPopup && message !== "") {
+        setShowPopup(true);
+        setHasOpenedPopup(true);
+      }
+
+      // 진짜 학교 시간표 기준 종료 타이머 계산
       let periodEndMinutes = 0;
-      if (detectedPeriod === "조례") periodEndMinutes = 520; // 08:40 종료
+      if (detectedPeriod === "담임조례") periodEndMinutes = 520;
       else if (detectedPeriod === "1교시") periodEndMinutes = 570;
       else if (detectedPeriod === "2교시") periodEndMinutes = 630;
       else if (detectedPeriod === "3교시") periodEndMinutes = 690;
@@ -167,9 +186,9 @@ export default function TimelineContainer({
     updateTimeAndProgress();
     const interval = setInterval(updateTimeAndProgress, 1000);
     return () => clearInterval(interval);
-  }, [initialPeriod]);
+  }, [initialPeriod, hasOpenedPopup]);
 
-  // 🔄 1분 주기 백그라운드 리프레시
+  // 🔄 1분 주기 백그라운드 데이터 리프레시
   useEffect(() => {
     const timer = setInterval(() => { router.refresh(); }, 60000);
     return () => clearInterval(timer);
@@ -182,47 +201,75 @@ export default function TimelineContainer({
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  // 오늘 요일일 때만 정밀 스크롤 하도록 연동 수정
   const scrollToCurrentFocus = () => {
-    if (selectedDay !== realToday) {
+    if (!isTodayActive) {
       router.push(`/student/${studentId}`);
     } else if (currentCardRef.current) {
       currentCardRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
     }
   };
 
-  const handleTouchStart = (e: React.TouchEvent) => { touchStartX.current = e.touches[0].clientX; };
-  const handleTouchMove = (e: React.TouchEvent) => { touchEndX.current = e.touches[0].clientX; };
+  // 💡 [터치 민감도 및 Y축 간섭 방지 개선]
+  const handleTouchStart = (e: React.TouchEvent) => { 
+    touchStartX.current = e.touches[0].clientX; 
+    touchStartY.current = e.touches[0].clientY; 
+  };
+  
+  const handleTouchMove = (e: React.TouchEvent) => { 
+    touchEndX.current = e.touches[0].clientX; 
+  };
+  
   const handleTouchEnd = () => {
-    if (!touchStartX.current || !touchEndX.current) return;
-    const distance = touchStartX.current - touchEndX.current;
+    if (!touchStartX.current || !touchEndX.current || !touchStartY.current) return;
+
+    // 터치 종류 시점의 Y축 위치 파악 (안전한 크로스 브라우징 처리)
+    const touchEndY = window.event && 'changedTouches' in window.event 
+      ? (window.event.changedTouches as any)[0].clientY 
+      : touchStartY.current; 
+
+    const diffX = touchStartX.current - touchEndX.current;
+    const diffY = touchStartY.current - touchEndY;
     const currentDayIndex = DAYS.indexOf(selectedDay);
 
-    if (distance > 70 && currentDayIndex < DAYS.length - 1) {
+    // 수직 스크롤(위아래 움직임)이 수평 스크롤보다 크다면 요일 스와이프를 무시하고 종료합니다.
+    if (Math.abs(diffY) > Math.abs(diffX)) {
+      touchStartX.current = null; touchEndX.current = null; touchStartY.current = null;
+      return;
+    }
+
+    // 민감도 임계값을 180px로 상향하여 의도적인 스와이프만 인식하게 합니다.
+    const SWIPE_THRESHOLD = 180; 
+
+    if (diffX > SWIPE_THRESHOLD && currentDayIndex < DAYS.length - 1) {
       router.push(`/student/${studentId}?day=${DAYS[currentDayIndex + 1]}`);
-    } else if (distance < -70 && currentDayIndex > 0) {
+    } else if (diffX < -SWIPE_THRESHOLD && currentDayIndex > 0) {
       router.push(`/student/${studentId}?day=${DAYS[currentDayIndex - 1]}`);
     }
-    touchStartX.current = null; touchEndX.current = null;
+
+    touchStartX.current = null; touchEndX.current = null; touchStartY.current = null;
   };
 
   const currentDayIndex = DAYS.indexOf(selectedDay);
   const prevDay = currentDayIndex > 0 ? DAYS[currentDayIndex - 1] : null;
   const nextDay = currentDayIndex < DAYS.length - 1 ? DAYS[currentDayIndex + 1] : null;
 
+  // 상황별 인지 하단 바 메시지 노출 순서 개편
   const getStatusMessage = () => {
-    if (selectedDay !== realToday) return `${selectedDay}요일 시간표 조회 중`;
-    if (currentPeriod === "주말") return "🏠 즐거운 주말이에요! 집에서 푹 쉬고 다음주에 만나요!";
-    if (currentPeriod === "담임조례") return "📋 지금은 담임선생님과의 조례 시간입니다!🔔";
-    if (currentPeriod === "등교 전") return "☀️ 지금은 등교 전이에요! 오늘도 화이팅 넘치는 하루 보내요! 💪";
-    if (currentPeriod === "점심시간") return "🍱 지금은 맛있는 점심시간입니다! 맛있게 먹어요! 🎉";
-    if (currentPeriod === "하교") return "🏠 오늘 일과가 끝났습니다. 내일 또 봐요! 🚌";
-    return `✨ 현재 ${currentPeriod} 진행 중`;
+    if (isTodayActive) {
+      if (currentPeriod === "주말") return "🏠 즐거운 주말이에요! 집에서 푹 쉬고 다음주에 만나요!";
+      if (currentPeriod === "담임조례") return "📋 지금은 담임 조례 시간입니다 🔔";
+      if (currentPeriod === "등교 전") return "☀️ 지금은 등교 전이에요! 오늘도 화이팅 넘치는 하루 보내요! 💪";
+      if (currentPeriod === "점심시간") return "🍱 지금은 맛있는 점심시간입니다! 맛있게 먹어요! 🎉";
+      if (currentPeriod === "하교") return "🏠 오늘 일과가 끝났습니다. 내일 또 봐요! 🚌";
+      return `✨ 현재 ${currentPeriod} 진행 중`;
+    } 
+    return `${selectedDay}요일 시간표 조회 중`;
   };
 
   return (
     <>
       <main 
-        /* 🎯 [배경 흐리게 효과] showPopup이 true일 때 전체 배경에 blur-sm 처리 및 이벤트 차단 */
         className={`min-h-screen w-full bg-[#F8F9FA] dark:bg-[#1C1C1E] text-[#1C1C1E] dark:text-[#F5F5F7] pb-24 flex flex-col items-center font-sans antialiased transition-all duration-500 touch-pan-y relative ${
           showPopup ? "blur-sm pointer-events-none select-none" : ""
         }`}
@@ -231,7 +278,7 @@ export default function TimelineContainer({
         onTouchEnd={handleTouchEnd}
       >
         {/* 프로그레스 바 */}
-        {selectedDay === realToday && (
+        {isTodayActive && (
           <div className="w-full fixed top-0 left-0 z-50 h-1 bg-neutral-100 dark:bg-neutral-800">
             <div className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-600 transition-all duration-1000 ease-out" style={{ width: `${progress}%` }} />
           </div>
@@ -243,7 +290,7 @@ export default function TimelineContainer({
             <div>
               <div className="flex items-center gap-1.5 mb-1">
                 <span className="text-[11px] font-bold tracking-tight text-neutral-400">진해고등학교 학습도움실 지원서비스</span>
-                {selectedDay === realToday && (
+                {isTodayActive && (
                   <span className="text-[10px] font-semibold text-blue-500 bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.5 rounded">
                     {progress}% 진행됨
                   </span>
@@ -270,8 +317,8 @@ export default function TimelineContainer({
 
             <div className="flex gap-0.5 flex-1 justify-center">
               {DAYS.map((day) => {
-                const isSelected = day === selectedDay;
-                const isActualToday = day === realToday;
+                const isSelected = day?.charAt(0) === selectedDay?.charAt(0);
+                const isActualToday = day?.charAt(0) === realToday?.charAt(0);
                 return (
                   <Link
                     key={day}
@@ -314,7 +361,7 @@ export default function TimelineContainer({
             </div>
           ) : (
             initialTimeline.map((item) => {
-              const isCurrentFocus = selectedDay === realToday && item.period === currentPeriod;
+              const isCurrentFocus = isTodayActive && item.period === currentPeriod;
 
               return (
                 <div
@@ -383,7 +430,7 @@ export default function TimelineContainer({
                           ? "bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400" 
                           : "bg-purple-50 text-purple-600 dark:bg-purple-950/40 dark:text-purple-400"
                       }`}>
-                        {notice.target === "전체" ? "전체공지" : "개인별 전달"}
+                        {notice.target === "전체" ? "전체공지" : "개인전달"}
                       </span>
                       <span className="text-xs font-medium text-gray-400 dark:text-gray-500">
                         발송: {notice.teacher} 선생님
@@ -397,7 +444,7 @@ export default function TimelineContainer({
               </div>
             ) : (
               <div className="text-center py-6 text-sm text-neutral-400 dark:text-neutral-500 font-medium">
-                ✨ 등록된 알림장이 없습니다. 즐거운 하루 보내요!
+                ✨ 등록된 알림장이 없습니다. 즐거운 하루!
               </div>
             )}
           </div>
@@ -407,12 +454,12 @@ export default function TimelineContainer({
         <div className="w-full max-w-md px-5 mt-4">
           <div className="bg-white dark:bg-[#2C2C2E] border border-neutral-100 dark:border-neutral-800 p-4 rounded-2xl flex justify-between items-center shadow-sm">
             <div className="flex items-center gap-2">
-              <span className={`h-1.5 w-1.5 rounded-full ${selectedDay === realToday ? "bg-green-500 animate-pulse" : "bg-neutral-300"}`}></span>
+              <span className={`h-1.5 w-1.5 rounded-full ${isTodayActive ? "bg-green-500 animate-pulse" : "bg-neutral-300"}`}></span>
               <span className="text-xs font-semibold tracking-tight text-neutral-500 dark:text-neutral-400">
                 {getStatusMessage()}
               </span>
             </div>
-            {selectedDay !== realToday && (
+            {!isTodayActive && (
               <Link href={`/student/${studentId}`} className="text-[11px] font-bold text-neutral-800 dark:text-neutral-200 hover:underline tracking-tight">
                 오늘로 돌아가기
               </Link>
@@ -421,18 +468,18 @@ export default function TimelineContainer({
         </div>
 
         {/* 플로팅 버튼 */}
-        {(showScrollTop || selectedDay !== realToday) && (
+        {(showScrollTop || !isTodayActive) && (
           <button
             onClick={scrollToCurrentFocus}
             className="fixed bottom-6 right-6 z-50 bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 font-bold text-xs px-4 py-3 rounded-full shadow-2xl flex items-center gap-1.5"
           >
             <span>🎯</span>
-            {selectedDay !== realToday ? "오늘로 이동" : "현재 교시"}
+            {!isTodayActive ? "오늘로 이동" : "현재 교시"}
           </button>
         )}
       </main>
 
-      {/* 🎯 5. [실시간 알림 팝업창 모달 UI] */}
+      {/* 🎯 5. 실시간 알림 팝업창 모달 UI */}
       {showPopup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/10 backdrop-blur-[2px] transition-all duration-300">
           <div className="bg-white/90 dark:bg-[#2C2C2E]/90 backdrop-blur-2xl w-full max-w-sm rounded-[32px] p-6 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.15)] border border-neutral-100/30 dark:border-neutral-800/30 text-center relative">
