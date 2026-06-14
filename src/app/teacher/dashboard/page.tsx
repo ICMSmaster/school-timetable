@@ -158,7 +158,17 @@ export default function IntegratedTeacherPortal() {
     if (savedLogs) setLogs(JSON.parse(savedLogs));
 
     const savedSession = localStorage.getItem("zh_current_user");
-    if (savedSession) setCurrentUser(JSON.parse(savedSession));
+  if (savedSession) {
+  const parsedUser = JSON.parse(savedSession);
+  // 권한 검증 안전장치 추가
+  if (["특수담임", "학급담임", "학년부장", "관리자"].includes(parsedUser?.role)) {
+    setCurrentUser(parsedUser);
+  } else {
+    // 잘못된 데이터 발견 시 초기화
+    localStorage.removeItem("zh_current_user");
+    setCurrentUser(null);
+  }
+}
   }, []);
 
   // --- 2. 구글 스프레드시트 연동 API 호출 ---
