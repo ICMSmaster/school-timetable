@@ -976,8 +976,8 @@ export default function IntegratedTeacherPortal() {
                   <label className="block text-slate-500 mb-1">직책 권한 등급</label>
                   <select value={newAccRole} onChange={(e) => setNewAccRole(e.target.value as any)} className="w-full px-3 py-2 border bg-white rounded-xl">
                     <option value="학급담임">학급담임 (본인 학반만 관리가능)</option>
-                    <option value="학년부장">학년부장 (전체 조회/본인 반 관리</option>
-                    <option value="특수담임">특수담임 (특수학급 전체 운영제어</option>
+                    <option value="학년부장">학년부장 (전체 조회/본인 반 관리)</option>
+                    <option value="특수담임">특수담임 (특수학급 전체 운영제어)</option>
                     <option value="관리자">관리자 시스템 권한</option>
                   </select>
                 </div>
