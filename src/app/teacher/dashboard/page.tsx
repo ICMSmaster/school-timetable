@@ -1,325 +1,505 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState, useEffect, useMemo } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 
-// ──────────────────────────────────────────────────────────
-// 타입 정의
-// ──────────────────────────────────────────────────────────
+// --- 🌐 데이터 인터페이스 규격 ---
 interface Student {
-  id: string;   // 학번
-  name: string; // 이름
-  homeroom: string; // 담임
-  status: string;   // 제작완료 / 시간표 데이터 없음
-  link: string;
+  id: string;
+  classCode: string;
+  name: string;
+  location: string;
+  status: string;
+  subject?: string;
 }
 
-interface ScheduleCell {
-  subject: string;
+interface NoticeItem {
+  target: string;
   teacher: string;
-  room: string;
-}
-
-type DaySchedule = Record<string, ScheduleCell>; // "1교시" → cell
-type WeekSchedule = Record<string, DaySchedule>; // "월" → DaySchedule
-
-interface NoticeRow {
-  seq: string;
-  target: string; // 학번_이름 or 전체
-  writer: string;
   content: string;
+  date?: string;
 }
 
-// ──────────────────────────────────────────────────────────
-// 상수
-// ──────────────────────────────────────────────────────────
-const STUDENTS: Student[] = [
-  { id: "20110", name: "김한얼",  homeroom: "김대홍", status: "제작완료",          link: "https://school-timetable-dubi.vercel.app/student/20110" },
-  { id: "20121", name: "이정준",  homeroom: "김대홍", status: "시간표 데이터 없음", link: "https://school-timetable-dubi.vercel.app/student/20121" },
-  { id: "20306", name: "김현중",  homeroom: "김수민", status: "제작완료",          link: "https://school-timetable-dubi.vercel.app/student/20306" },
-  { id: "20311", name: "박진현",  homeroom: "김수민", status: "제작완료",          link: "https://school-timetable-dubi.vercel.app/student/20311" },
-  { id: "20402", name: "강민준",  homeroom: "정은영", status: "시간표 데이터 없음", link: "https://school-timetable-dubi.vercel.app/student/20402" },
-  { id: "20406", name: "김세현",  homeroom: "정은영", status: "시간표 데이터 없음", link: "https://school-timetable-dubi.vercel.app/student/20406" },
-  { id: "20418", name: "손민찬",  homeroom: "정은영", status: "제작완료",          link: "https://school-timetable-dubi.vercel.app/student/20418" },
-  { id: "20612", name: "손찬민",  homeroom: "서한성", status: "제작완료",          link: "https://school-timetable-dubi.vercel.app/student/20612" },
-  { id: "20616", name: "오승철",  homeroom: "서한성", status: "제작완료",          link: "https://school-timetable-dubi.vercel.app/student/20616" },
-  { id: "20813", name: "박찬석",  homeroom: "여지언", status: "제작완료",          link: "https://school-timetable-dubi.vercel.app/student/20813" },
-  { id: "20906", name: "김재원",  homeroom: "서용환", status: "제작완료",          link: "https://school-timetable-dubi.vercel.app/student/20906" },
-  { id: "21026", name: "조연우",  homeroom: "강지영", status: "제작완료",          link: "https://school-timetable-dubi.vercel.app/student/21026" },
-  { id: "21027", name: "최재범",  homeroom: "강지영", status: "제작완료",          link: "https://school-timetable-dubi.vercel.app/student/21027" },
+// --- 🚀 Fallback Default Data (API 연결 지연 대비용) ---
+const DEFAULT_STUDENTS: Student[] = [
+  { id: "20110", classCode: "2-1", name: "김한얼", location: "학습도움실", status: "정상", subject: "국어 (특수)" },
+  { id: "20121", classCode: "2-1", name: "이정준", location: "컴퓨터실", status: "정상", subject: "진로와 직업" },
+  { id: "20306", classCode: "2-3", name: "김현중", location: "2학년 3반", status: "집중요망", subject: "수학 (통합)" },
+  { id: "20311", classCode: "2-3", name: "박진현", location: "2학년 3반", status: "정상", subject: "영어1 (통합)" },
+  { id: "20402", classCode: "2-4", name: "강민준", location: "학습도움실", status: "정상", subject: "국어 (특수)" },
+  { id: "20406", classCode: "2-4", name: "김세현", location: "체육관", status: "특이행동", subject: "체육 (통합)" },
+  { id: "20418", classCode: "2-4", name: "손민찬", location: "음악실", status: "조퇴", subject: "음악 (통합)" },
+  { id: "20612", classCode: "2-6", name: "손찬민", location: "컴퓨터실", status: "정상", subject: "진로와 직업" },
+  { id: "20616", classCode: "2-6", name: "오승철", location: "미술실", status: "돌봄필수", subject: "미술 (통합)" },
+  { id: "20813", classCode: "2-8", name: "박찬석", location: "2학년 8반", status: "정상", subject: "수학 (통합)" },
+  { id: "20906", classCode: "2-9", name: "김재원", location: "학습도움실", status: "결석", subject: "국어 (특수)" },
+  { id: "21026", classCode: "2-10", name: "조연우", location: "2학년 10반", status: "정상", subject: "영어1 (통합)" },
+  { id: "21027", classCode: "2-10", name: "최재범", location: "체육관", status: "정상", subject: "체육 (통합)" }
 ];
 
-const PERIODS = ["1교시", "2교시", "3교시", "4교시", "5교시", "6교시", "7교시"];
-const PERIOD_TIMES: Record<string, string> = {
-  "1교시": "08:40", "2교시": "09:40", "3교시": "10:40",
-  "4교시": "11:40", "5교시": "13:35", "6교시": "14:35", "7교시": "15:40",
-};
-const DAYS = ["월", "화", "수", "목", "금"];
+export default function TeacherDashboardPage() {
+  const router = useRouter();
 
-const PERIOD_RANGES = [
-  { name: "1교시", start: 8 * 60 + 40, end: 9 * 60 + 30 },
-  { name: "2교시", start: 9 * 60 + 40, end: 10 * 60 + 30 },
-  { name: "3교시", start: 10 * 60 + 40, end: 11 * 60 + 30 },
-  { name: "4교시", start: 11 * 60 + 40, end: 12 * 60 + 30 },
-  { name: "5교시", start: 13 * 60 + 35, end: 14 * 60 + 25 },
-  { name: "6교시", start: 14 * 60 + 35, end: 15 * 60 + 25 },
-  { name: "7교시", start: 15 * 60 + 40, end: 16 * 60 + 30 },
-];
+  // --- 🏢 핵심 인프라 스페이스 (인사 및 계정) ---
+  const [teachers, setTeachers] = useState<Array<any>>([]);
+  const [passwords, setPasswords] = useState<Record<string, string>>({});
+  const [systemLogs, setSystemLogs] = useState<Array<any>>([]);
+  const [currentTeacher, setCurrentTeacher] = useState<any | null>(null);
 
-// ──────────────────────────────────────────────────────────
-// Google Sheets 파싱 유틸
-// (기존 google.ts의 getSheetData() 활용)
-// ──────────────────────────────────────────────────────────
-async function getSheetData(sheetName: string): Promise<string[][] | null> {
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_API_KEY;
-  const spreadsheetId = process.env.NEXT_PUBLIC_SPREADSHEET_ID;
-  if (!apiKey || !spreadsheetId) return null;
-  const range = `${sheetName}!A1:H35`;
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?key=${apiKey}`;
-  try {
-    const res = await fetch(url);
-    const data = await res.json();
-    return data.values ?? null;
-  } catch {
-    return null;
-  }
-}
+  // 로그인 및 암호화 컨트롤러
+  const [loginId, setLoginId] = useState("");
+  const [loginPw, setLoginPw] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const [isPasswordSetupMode, setIsPasswordSetupMode] = useState(false);
+  const [pendingTeacher, setPendingTeacher] = useState<any>(null);
+  const [newPasswordInput, setNewPasswordInput] = useState("");
 
-function parseStudentSchedule(rows: string[][]): WeekSchedule {
-  // 행 구조: 교시, 월, 화, 수, 목, 금  (3줄 세트: 과목/교사/교실)
-  const schedule: WeekSchedule = {};
-  DAYS.forEach((d) => (schedule[d] = {}));
+  // 민석준(개발자) 전용 계정 프로비저닝 상태
+  const [createTeacherName, setCreateTeacherName] = useState("");
+  const [createTeacherType, setCreateTeacherType] = useState("원반담임");
+  const [createTargetClass, setCreateTargetClass] = useState("2-1");
 
-  let periodIdx = 0;
-  for (let i = 1; i < rows.length; i++) {
-    const row = rows[i];
-    if (!row || row.length === 0) continue;
-    const first = (row[0] ?? "").trim();
-    if (first.endsWith("교시")) {
-      periodIdx = 0;
-      const period = first;
-      const subjectRow = row;
-      const teacherRow = rows[i + 1] ?? [];
-      const roomRow = rows[i + 2] ?? [];
-      DAYS.forEach((day, di) => {
-        schedule[day][period] = {
-          subject: (subjectRow[di + 1] ?? "").trim(),
-          teacher: (teacherRow[di + 1] ?? "").trim(),
-          room: (roomRow[di + 1] ?? "").replace(/🎈/g, "").trim(),
-        };
-      });
-      i += 2; // skip teacher & room rows
-      periodIdx++;
+  // --- 📊 구글 시트 연동 데이터 스페이스 ---
+  const [isLoading, setIsLoading] = useState(true);
+  const [sheetStudents, setSheetStudents] = useState<Student[]>([]);
+  const [sheetTimelines, setSheetTimelines] = useState<Record<string, string[][]>>({});
+  const [sheetNotices, setSheetNotices] = useState<Record<string, NoticeItem[]>>({});
+
+  // 일과 관제 제어 장치
+  const [statusFilter, setStatusFilter] = useState<string>("전체");
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [studentFeeds, setStudentFeeds] = useState<Record<string, any>>({});
+  const [newFeedText, setNewFeedText] = useState("");
+  const [sharedMemo, setSharedMemo] = useState("- 이동 수업 시 소음 완화용 전용 헤드셋 지참 동행 요망.\n- 학습도움실 전산기기 정기 점검 예정.");
+
+  // 시간 및 교시 상태 엔진
+  const [currentTimeStr, setCurrentTimeStr] = useState("");
+  const [currentPeriod, setCurrentPeriod] = useState("등교 전");
+  const [timeLeft, setTimeLeft] = useState<string>("");
+  const [progress, setProgress] = useState(0);
+
+  // --- 🔄 1. 구글 시트 API 동기화 (Data Fetching) ---
+  useEffect(() => {
+    const fetchSheetData = async () => {
+      try {
+        const response = await fetch("/api/sheets-data");
+        if (!response.ok) throw new Error("API 통신 에러");
+        const data = await response.json();
+        setSheetStudents(data.students || DEFAULT_STUDENTS);
+        setSheetTimelines(data.timelines || {});
+        setSheetNotices(data.notices || {});
+      } catch (error) {
+        console.warn("구글 시트 연동 실패. 로컬 안전 데이터를 로드합니다.", error);
+        setSheetStudents(DEFAULT_STUDENTS);
+        setSheetTimelines({}); // API 실패 시 빈 시간표
+        setSheetNotices({});   // API 실패 시 빈 알림장
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchSheetData();
+    // 1분마다 백그라운드 데이터 리프레시
+    const interval = setInterval(fetchSheetData, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // --- 🕒 2. 실시간 시간 및 일과 교시 정밀 추적 연산 (선생님 로직 100% 이식) ---
+  useEffect(() => {
+    const updateTimeAndPeriod = () => {
+      const now = new Date();
+      setCurrentTimeStr(now.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }));
+      
+      const dayOfWeek = now.getDay(); // 0: 일요일, 6: 토요일
+      const hours = now.getHours();
+      const minutes = now.getMinutes();
+      const totalMinutes = hours * 60 + minutes;
+
+      // 주말 예외 처리
+      if (dayOfWeek === 0 || dayOfWeek === 6) {
+        setProgress(0);
+        setCurrentPeriod("주말");
+        setTimeLeft("");
+        return;
+      }
+
+      // 평일 진행률 (08:40 ~ 16:30)
+      const startDay = 520;
+      const endDay = 990;
+      if (totalMinutes < startDay) setProgress(0);
+      else if (totalMinutes > endDay) setProgress(100);
+      else setProgress(Math.round(((totalMinutes - startDay) / (endDay - startDay)) * 100));
+
+      // 교시 정밀 추적
+      let detectedPeriod = "등교 전";
+      let periodEndMinutes = 0;
+
+      if (totalMinutes >= 510 && totalMinutes < 520) { detectedPeriod = "담임조례"; periodEndMinutes = 520; }
+      else if (totalMinutes >= 520 && totalMinutes < 570) { detectedPeriod = "1교시"; periodEndMinutes = 570; }
+      else if (totalMinutes >= 570 && totalMinutes < 580) { detectedPeriod = "쉬는시간"; periodEndMinutes = 580; }
+      else if (totalMinutes >= 580 && totalMinutes < 630) { detectedPeriod = "2교시"; periodEndMinutes = 630; }
+      else if (totalMinutes >= 630 && totalMinutes < 640) { detectedPeriod = "쉬는시간"; periodEndMinutes = 640; }
+      else if (totalMinutes >= 640 && totalMinutes < 690) { detectedPeriod = "3교시"; periodEndMinutes = 690; }
+      else if (totalMinutes >= 690 && totalMinutes < 700) { detectedPeriod = "쉬는시간"; periodEndMinutes = 700; }
+      else if (totalMinutes >= 700 && totalMinutes < 750) { detectedPeriod = "4교시"; periodEndMinutes = 750; }
+      else if (totalMinutes >= 750 && totalMinutes < 815) { detectedPeriod = "점심시간"; periodEndMinutes = 815; }
+      else if (totalMinutes >= 815 && totalMinutes < 865) { detectedPeriod = "5교시"; periodEndMinutes = 865; }
+      else if (totalMinutes >= 865 && totalMinutes < 875) { detectedPeriod = "쉬는시간"; periodEndMinutes = 875; }
+      else if (totalMinutes >= 875 && totalMinutes < 925) { detectedPeriod = "6교시"; periodEndMinutes = 925; }
+      else if (totalMinutes >= 925 && totalMinutes < 940) { detectedPeriod = "쉬는시간"; periodEndMinutes = 940; }
+      else if (totalMinutes >= 940 && totalMinutes < 990) { detectedPeriod = "7교시"; periodEndMinutes = 990; }
+      else if (totalMinutes >= 990) { detectedPeriod = "하교"; }
+
+      setCurrentPeriod(detectedPeriod);
+
+      if (periodEndMinutes > 0) {
+        const remainingMin = periodEndMinutes - totalMinutes;
+        setTimeLeft(remainingMin > 0 ? `종료까지 ${remainingMin}분` : "");
+      } else {
+        setTimeLeft("");
+      }
+    };
+
+    updateTimeAndPeriod();
+    const interval = setInterval(updateTimeAndPeriod, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // --- 💾 3. 인사정보 시스템 및 로컬 캐시 레지스트리 싱크 ---
+  useEffect(() => {
+    const savedTeachers = localStorage.getItem("zh_teachers_registry");
+    let currentList = [];
+    if (savedTeachers) {
+      currentList = JSON.parse(savedTeachers);
+      setTeachers(currentList);
+    } else {
+      const defaultTeachers = [
+        { name: "고장선", type: "특수담임", targetClass: "all" },
+        { name: "김다해", type: "특수담임", targetClass: "all" },
+        { name: "임선곤", type: "특수담임", targetClass: "all" },
+        { name: "서용환", type: "학년부장", targetClass: "all" },
+        { name: "김대홍", type: "원반담임", targetClass: "2-1" },
+        { name: "김수민", type: "원반담임", targetClass: "2-3" },
+        { name: "정은영", type: "원반담임", targetClass: "2-4" },
+        { name: "서한성", type: "원반담임", targetClass: "2-6" },
+        { name: "여지언", type: "원반담임", targetClass: "2-8" },
+        { name: "강지영", type: "원반담임", targetClass: "2-10" }
+      ];
+      currentList = defaultTeachers;
+      setTeachers(defaultTeachers);
+      localStorage.setItem("zh_teachers_registry", JSON.stringify(defaultTeachers));
     }
-  }
-  return schedule;
-}
 
-function parseNotices(rows: string[][]): NoticeRow[] {
-  const notices: NoticeRow[] = [];
-  for (let i = 1; i < rows.length; i++) {
-    const row = rows[i];
-    if (!row || row.length < 4) continue;
-    const content = (row[3] ?? "").trim();
-    if (!content) continue;
-    notices.push({
-      seq: row[0] ?? "",
-      target: (row[1] ?? "").trim(),
-      writer: (row[2] ?? "").trim(),
-      content,
+    const savedPws = localStorage.getItem("zh_secured_pws");
+    if (savedPws) {
+      setPasswords(JSON.parse(savedPws));
+    } else {
+      const initialMap: Record<string, string> = {};
+      currentList.forEach((t: any) => { initialMap[t.name] = "1111"; });
+      // 🔒 최고 개발자 고정 키 탑재
+      initialMap["민석준"] = "msj2026!!@";
+      setPasswords(initialMap);
+      localStorage.setItem("zh_secured_pws", JSON.stringify(initialMap));
+    }
+
+    const savedLogs = localStorage.getItem("zh_secured_logs");
+    if (savedLogs) setSystemLogs(JSON.parse(savedLogs));
+
+    const savedSession = localStorage.getItem("zh_current_teacher_session");
+    if (savedSession) setCurrentTeacher(JSON.parse(savedSession));
+  }, []);
+
+  const writeLog = (msg: string, level: string = "INFO") => {
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString("ko-KR", { hour12: false });
+    const newLog = { id: Date.now(), time: timeStr, msg, level };
+    setSystemLogs(prev => {
+      const updated = [newLog, ...prev];
+      localStorage.setItem("zh_secured_logs", JSON.stringify(updated));
+      return updated;
     });
-  }
-  return notices;
-}
-
-// ──────────────────────────────────────────────────────────
-// 시간 유틸
-// ──────────────────────────────────────────────────────────
-function getCurrentPeriod(): string {
-  const now = new Date();
-  const t = now.getHours() * 60 + now.getMinutes();
-  for (const p of PERIOD_RANGES) {
-    if (t >= p.start && t <= p.end) return p.name;
-  }
-  return "";
-}
-
-function getCurrentDay(): string {
-  return DAYS[new Date().getDay() - 1] ?? "";
-}
-
-// ──────────────────────────────────────────────────────────
-// 메인 컴포넌트
-// ──────────────────────────────────────────────────────────
-export default function TeacherDashboard() {
-  const [tab, setTab] = useState<"overview" | "schedule" | "notice" | "links">("overview");
-  const [selectedStudent, setSelectedStudent] = useState<Student>(STUDENTS[0]);
-  const [weekSchedule, setWeekSchedule] = useState<WeekSchedule | null>(null);
-  const [notices, setNotices] = useState<NoticeRow[]>([]);
-  const [loadingSchedule, setLoadingSchedule] = useState(false);
-  const [loadingNotice, setLoadingNotice] = useState(false);
-  const [currentPeriod, setCurrentPeriod] = useState(getCurrentPeriod());
-  const [currentDay, setCurrentDay] = useState(getCurrentDay());
-  const [now, setNow] = useState(new Date());
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-
-  // 시계 업데이트
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setNow(new Date());
-      setCurrentPeriod(getCurrentPeriod());
-      setCurrentDay(getCurrentDay());
-    }, 30000);
-    return () => clearInterval(timer);
-  }, []);
-
-  // 학생 시간표 로드
-  const loadSchedule = useCallback(async (student: Student) => {
-    setLoadingSchedule(true);
-    setWeekSchedule(null);
-    const sheetName = `${student.id}_${student.name}`;
-    const rows = await getSheetData(sheetName);
-    if (rows) setWeekSchedule(parseStudentSchedule(rows));
-    setLoadingSchedule(false);
-  }, []);
-
-  // 알림장 로드
-  const loadNotices = useCallback(async () => {
-    setLoadingNotice(true);
-    const rows = await getSheetData("알림장");
-    if (rows) setNotices(parseNotices(rows));
-    setLoadingNotice(false);
-  }, []);
-
-  useEffect(() => {
-    if (tab === "schedule") loadSchedule(selectedStudent);
-  }, [tab, selectedStudent, loadSchedule]);
-
-  useEffect(() => {
-    if (tab === "notice") loadNotices();
-  }, [tab, loadNotices]);
-
-  const copyLink = (student: Student) => {
-    navigator.clipboard.writeText(student.link);
-    setCopiedId(student.id);
-    setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const readyCount = STUDENTS.filter((s) => s.status === "제작완료").length;
-  const notReadyCount = STUDENTS.length - readyCount;
+  // --- 🔑 4. 통합 로그인 및 암호 강제변경 로직 ---
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    const idInput = loginId.trim();
+    const pwInput = loginPw.trim();
 
-  // 오늘 학습도움실 오는 학생 목록 (schedule tab이 아니어도 overview에서 보여줄 수 있음)
-  // 간단히 상태 표시만
+    // 💻 최고 개발자 예외 처리
+    if (idInput === "민석준") {
+      const masterPassword = passwords["민석준"] || "msj2026!!@";
+      if (pwInput === masterPassword) {
+        const devSession = { name: "민석준", type: "개발자", targetClass: "all" };
+        setCurrentTeacher(devSession);
+        localStorage.setItem("zh_current_teacher_session", JSON.stringify(devSession));
+        writeLog("최고 엔지니어 민석준 마스터 권한 포털 인가 완료", "SECURE");
+        setLoginError("");
+      } else {
+        setLoginError("마스터 보안 인증 코드가 올바르지 않습니다.");
+      }
+      return;
+    }
 
-  return (
-    <div style={styles.container}>
-      {/* ── 헤더 ── */}
-      <header style={styles.header}>
-        <div style={styles.headerLeft}>
-          <div style={styles.badge}>특수학급</div>
-          <div>
-            <h1 style={styles.title}>교사 업무지원 포털</h1>
-            <p style={styles.subtitle}>진해고등학교 특수학급 · 2026학년도</p>
+    // 일반 교사 처리
+    const foundTeacher = teachers.find(t => t.name === idInput);
+    if (!foundTeacher) {
+      setLoginError("인사 정보 시스템에 등록되지 않은 성함입니다.");
+      return;
+    }
+
+    const storedPassword = passwords[idInput] || "1111";
+    if (pwInput === storedPassword) {
+      if (pwInput === "1111") {
+        setPendingTeacher(foundTeacher);
+        setIsPasswordSetupMode(true);
+      } else {
+        setCurrentTeacher(foundTeacher);
+        localStorage.setItem("zh_current_teacher_session", JSON.stringify(foundTeacher));
+        writeLog(`${foundTeacher.name} 교사 포털 접속 승인`, "AUTH");
+      }
+    } else {
+      setLoginError("비밀번호 인증에 실패하였습니다.");
+    }
+  };
+
+  const handleRegisterNewPassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!/^\d{4}$/.test(newPasswordInput)) {
+      alert("보안 정책에 따라 비밀번호는 숫자 4자리로 구성되어야 합니다.");
+      return;
+    }
+    const updatedPws = { ...passwords, [pendingTeacher.name]: newPasswordInput };
+    setPasswords(updatedPws);
+    localStorage.setItem("zh_secured_pws", JSON.stringify(updatedPws));
+    setCurrentTeacher(pendingTeacher);
+    localStorage.setItem("zh_current_teacher_session", JSON.stringify(pendingTeacher));
+    setIsPasswordSetupMode(false);
+  };
+
+  const handleLogout = () => {
+    setCurrentTeacher(null);
+    localStorage.removeItem("zh_current_teacher_session");
+  };
+
+  // --- ⚙️ 5. 최고 개발자 마스터 권한 제어 모듈 ---
+  const handleMasterCreateAccount = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!createTeacherName.trim()) return;
+    const name = createTeacherName.trim();
+    if (teachers.some(t => t.name === name)) {
+      alert("이미 데이터베이스에 인가된 교직원입니다.");
+      return;
+    }
+    const newTeacher = { name, type: createTeacherType, targetClass: createTeacherType === "원반담임" ? createTargetClass : "all" };
+    const updatedList = [...teachers, newTeacher];
+    const updatedPws = { ...passwords, [name]: "1111" };
+
+    setTeachers(updatedList);
+    setPasswords(updatedPws);
+    localStorage.setItem("zh_teachers_registry", JSON.stringify(updatedList));
+    localStorage.setItem("zh_secured_pws", JSON.stringify(updatedPws));
+    writeLog(`[민석준 마스터] 신규 임용 계정 생성: ${name} (${createTeacherType})`, "SECURE");
+    setCreateTeacherName("");
+  };
+
+  const handleMasterDeleteAccount = (name: string) => {
+    if (!confirm(`${name} 교사를 시스템에서 영구 제명하시겠습니까?`)) return;
+    const updatedList = teachers.filter(t => t.name !== name);
+    const updatedPws = { ...passwords };
+    delete updatedPws[name];
+    setTeachers(updatedList);
+    setPasswords(updatedPws);
+    localStorage.setItem("zh_teachers_registry", JSON.stringify(updatedList));
+    localStorage.setItem("zh_secured_pws", JSON.stringify(updatedPws));
+    writeLog(`[민석준 마스터] 계정 권한 파기: ${name}`, "SECURE");
+  };
+
+  const handleMasterChangeRole = (name: string, newType: string, newClass: string) => {
+    const updatedList = teachers.map(t => t.name === name ? { ...t, type: newType, targetClass: newType === "원반담임" ? newClass : "all" } : t);
+    setTeachers(updatedList);
+    localStorage.setItem("zh_teachers_registry", JSON.stringify(updatedList));
+    writeLog(`[민석준 마스터] ${name} 교사 권한 변경 -> ${newType}`, "SECURE");
+  };
+
+  const handleMasterChangePassword = (name: string, targetPw: string) => {
+    if (!targetPw.trim()) return;
+    const updatedPws = { ...passwords, [name]: targetPw.trim() };
+    setPasswords(updatedPws);
+    localStorage.setItem("zh_secured_pws", JSON.stringify(updatedPws));
+    writeLog(`[민석준 마스터] ${name} 교사 패스워드 강제 변조`, "SECURE");
+  };
+
+  // --- 📝 6. 실시간 상호 공유 소통 피드 작성 (권한 원천 개방) ---
+  const handleAddFeed = (studentId: string) => {
+    if (!newFeedText.trim() || !currentTeacher) return;
+    const newMsg = {
+      sender: currentTeacher.name,
+      role: currentTeacher.type === "개발자" ? "시스템총괄" : currentTeacher.type,
+      text: newFeedText.trim(),
+      time: new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false })
+    };
+    setStudentFeeds(prev => ({ ...prev, [studentId]: [...(prev[studentId] || []), newMsg] }));
+    setNewFeedText("");
+  };
+
+  // 교사 권한별 학생 필터링
+  const authorizedStudents = useMemo(() => {
+    if (!currentTeacher) return [];
+    if (currentTeacher.targetClass === "all") return sheetStudents;
+    return sheetStudents.filter(s => s.classCode === currentTeacher.targetClass);
+  }, [currentTeacher, sheetStudents]);
+
+  const filteredStudents = useMemo(() => {
+    if (statusFilter === "도움반") return authorizedStudents.filter(s => s.location === "학습도움실" || s.location === "도움반");
+    if (statusFilter === "통합학급") return authorizedStudents.filter(s => s.location !== "학습도움실" && s.location !== "도움반");
+    return authorizedStudents;
+  }, [statusFilter, authorizedStudents]);
+
+  // --- 🚪 7. [뷰 렌더링 1] 업무포털 보안 게이트웨이 화면 ---
+  if (!currentTeacher) {
+    return (
+      <div className="min-h-screen bg-gradient-to-tr from-[#EBF2FA] to-[#F5F8FC] flex flex-col items-center justify-center p-4">
+        <div className="w-full max-w-md bg-white rounded-2xl border border-[#D3E0EA] p-8 shadow-xl">
+          <div className="flex flex-col items-center text-center mb-6">
+            <div className="mb-3 bg-[#F0F4F8] p-3 rounded-full border border-[#D9E2EC]">
+              <Image src="/build_logo.png" alt="진해고" width={55} height={55} className="object-contain" />
+            </div>
+            <h1 className="text-xl font-extrabold text-[#1F2937] tracking-tight">교육행정 인트라넷 지원시스템</h1>
+            <p className="text-xs text-[#6B7280] mt-1 font-medium">진해고등학교 교육정보시스템 업무포털</p>
           </div>
+
+          {!isPasswordSetupMode ? (
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-[#4B5563] mb-1 pl-1">사용자 성명 / ID</label>
+                <input type="text" placeholder="성함 입력 (예: 민석준)" value={loginId} onChange={(e) => setLoginId(e.target.value)} className="w-full px-4 py-3 bg-[#F9FAFB] border border-[#D1D5DB] rounded-xl text-sm font-semibold text-black focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/30 focus:border-[#3B82F6]" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-[#4B5563] mb-1 pl-1">비밀번호 인증코드</label>
+                <input type="password" placeholder="인증 패스워드 기입" value={loginPw} onChange={(e) => setLoginPw(e.target.value)} className="w-full px-4 py-3 bg-[#F9FAFB] border border-[#D1D5DB] rounded-xl text-sm font-semibold text-black focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/30 focus:border-[#3B82F6]" />
+              </div>
+              {loginError && <p className="text-xs text-red-500 font-bold pl-1">⚠️ {loginError}</p>}
+              <button type="submit" className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold text-sm py-3.5 rounded-xl transition-all shadow-sm">
+                보안 인증서 로그인 및 진입
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleRegisterNewPassword} className="space-y-4">
+              <div className="bg-[#EFF6FF] p-4 rounded-xl border border-[#BFDBFE] text-center mb-2">
+                <p className="text-xs font-bold text-[#1E40AF]">최초 로그인 보안 인증 코드 세팅</p>
+                <p className="text-[11px] text-[#2563EB] mt-1">로그인에 사용할 단독 **숫자 4자리**를 입력하세요.</p>
+              </div>
+              <input type="password" maxLength={4} placeholder="숫자 4자리 기입" value={newPasswordInput} onChange={(e) => setNewPasswordInput(e.target.value.replace(/[^0-9]/g, ""))} className="w-full px-4 py-3 bg-white border-2 border-[#3B82F6] rounded-xl text-center text-lg font-mono tracking-widest font-extrabold focus:outline-none" />
+              <button type="submit" className="w-full bg-[#10B981] hover:bg-[#059669] text-white font-bold text-sm py-3 rounded-xl transition-colors">
+                단독 패스워드 설정 완료
+              </button>
+            </form>
+          )}
         </div>
-        <div style={styles.clock}>
-          <div style={styles.clockTime}>
-            {now.getHours().toString().padStart(2, "0")}:
-            {now.getMinutes().toString().padStart(2, "0")}
-          </div>
-          <div style={styles.clockSub}>
-            {currentDay ? `${currentDay}요일` : "주말"}
-            {currentPeriod ? ` · ${currentPeriod} 진행중` : " · 수업 외 시간"}
-          </div>
-        </div>
-      </header>
+      </div>
+    );
+  }
 
-      {/* ── 탭 ── */}
-      <nav style={styles.nav}>
-        {(
-          [
-            { key: "overview", label: "📊 현황" },
-            { key: "schedule", label: "📅 시간표 조회" },
-            { key: "notice",   label: "📝 알림장" },
-            { key: "links",    label: "🔗 학생 링크" },
-          ] as const
-        ).map((t) => (
-          <button
-            key={t.key}
-            style={{ ...styles.tabBtn, ...(tab === t.key ? styles.tabBtnActive : {}) }}
-            onClick={() => setTab(t.key)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </nav>
+  // --- 👑 8. [뷰 렌더링 2] 최고 개발자 (민석준) 시스템 마스터 인프라 백본 ---
+  if (currentTeacher.type === "개발자") {
+    return (
+      <div className="min-h-screen bg-[#F4F7FC] text-[#333333] font-sans flex flex-col">
+        <header className="bg-gradient-to-r from-[#1E3A8A] to-[#2563EB] text-white px-6 py-4 flex justify-between items-center shadow-md">
+          <div className="flex items-center gap-3">
+            <Image src="/build_logo.png" alt="Logo" width={38} height={38} className="brightness-125 object-contain" />
+            <div>
+              <h1 className="text-base font-extrabold tracking-tight flex items-center gap-2">
+                <span>진해고 교육행정 통합포털 (NEIS 백본 제어국)</span>
+                <span className="bg-[#EF4444] text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-sm">ROOT</span>
+              </h1>
+              <p className="text-xs text-blue-200">중앙 데이터 허브실 | 관리총괄: <span className="font-bold underline text-white">민석준</span></p>
+            </div>
+          </div>
+          <div className="flex items-center gap-4">
+            <span className="bg-blue-900/50 text-blue-100 border border-blue-700 font-mono text-xs px-3 py-1 rounded-lg">{currentTimeStr}</span>
+            <button onClick={handleLogout} className="bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold text-xs px-3 py-2 rounded-xl transition-all">
+              🚪 마스터 로그아웃
+            </button>
+          </div>
+        </header>
 
-      <main style={styles.main}>
-        {/* ══════════ 현황 탭 ══════════ */}
-        {tab === "overview" && (
-          <div>
-            {/* 요약 카드 */}
-            <div style={styles.cardRow}>
-              <div style={{ ...styles.statCard, background: "linear-gradient(135deg,#3b82f6,#6366f1)" }}>
-                <div style={styles.statNum}>{STUDENTS.length}</div>
-                <div style={styles.statLabel}>전체 학생</div>
-              </div>
-              <div style={{ ...styles.statCard, background: "linear-gradient(135deg,#10b981,#059669)" }}>
-                <div style={styles.statNum}>{readyCount}</div>
-                <div style={styles.statLabel}>시간표 등록 완료</div>
-              </div>
-              <div style={{ ...styles.statCard, background: "linear-gradient(135deg,#f59e0b,#d97706)" }}>
-                <div style={styles.statNum}>{notReadyCount}</div>
-                <div style={styles.statLabel}>데이터 미등록</div>
-              </div>
-              <div style={{ ...styles.statCard, background: "linear-gradient(135deg,#8b5cf6,#7c3aed)" }}>
-                <div style={styles.statNum}>{Math.round((readyCount / STUDENTS.length) * 100)}%</div>
-                <div style={styles.statLabel}>등록률</div>
-              </div>
+        <main className="p-6 max-w-7xl w-full mx-auto grid grid-cols-1 xl:grid-cols-3 gap-6 flex-1">
+          <div className="xl:col-span-2 space-y-6">
+            <div className="bg-white border border-[#DCE4EC] rounded-2xl p-5 shadow-sm">
+              <h2 className="text-sm font-black text-[#1E3A8A] border-b border-slate-100 pb-3 mb-4 flex items-center gap-2">
+                👥 신규 교직원 데이터 인가 기동 (User Setup)
+              </h2>
+              <form onSubmit={handleMasterCreateAccount} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1">교직원 성함</label>
+                  <input type="text" required value={createTeacherName} onChange={(e) => setCreateTeacherName(e.target.value)} className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1">인사 업무 권한</label>
+                  <select value={createTeacherType} onChange={(e) => setCreateTeacherType(e.target.value)} className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold">
+                    <option value="원반담임">원반담임 (일반)</option>
+                    <option value="특수담임">특수담임 (도움반)</option>
+                    <option value="학년부장">학년부장 (전체)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1">관할 담당 학급</label>
+                  <select value={createTargetClass} disabled={createTeacherType !== "원반담임"} onChange={(e) => setCreateTargetClass(e.target.value)} className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold disabled:opacity-30">
+                    <option value="2-1">2-1반</option>
+                    <option value="2-3">2-3반</option>
+                    <option value="2-4">2-4반</option>
+                    <option value="2-6">2-6반</option>
+                    <option value="2-8">2-8반</option>
+                    <option value="2-10">2-10반</option>
+                  </select>
+                </div>
+                <button type="submit" className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold text-xs py-2.5 rounded-xl transition-all">
+                  원장 서버 강제 등록
+                </button>
+              </form>
             </div>
 
-            {/* 학생 목록 테이블 */}
-            <div style={styles.card}>
-              <h2 style={styles.cardTitle}>학생 명렬</h2>
-              <div style={styles.tableWrap}>
-                <table style={styles.table}>
-                  <thead>
-                    <tr style={styles.thead}>
-                      <th style={styles.th}>학번</th>
-                      <th style={styles.th}>이름</th>
-                      <th style={styles.th}>담임교사</th>
-                      <th style={styles.th}>상태</th>
-                      <th style={styles.th}>학생 앱 바로가기</th>
+            <div className="bg-white border border-[#DCE4EC] rounded-2xl p-5 shadow-sm">
+              <h2 className="text-sm font-black text-[#1E3A8A] border-b border-slate-100 pb-2 mb-3">
+                🗂️ 실시간 교직원 데이터 마이그레이션 레지스트리
+              </h2>
+              <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                <table className="w-full text-left border-collapse">
+                  <thead className="bg-[#F8FAFC] border-b border-slate-200 text-xs text-slate-500 font-bold">
+                    <tr>
+                      <th className="p-3">성명</th>
+                      <th className="p-3">직무 권한 스위칭</th>
+                      <th className="p-3">관제 학급 코드</th>
+                      <th className="p-3">암호 변조</th>
+                      <th className="p-3 text-center">계정 파기</th>
                     </tr>
                   </thead>
-                  <tbody>
-                    {STUDENTS.map((s, i) => (
-                      <tr
-                        key={s.id}
-                        style={{ ...styles.tr, background: i % 2 === 0 ? "#f9fafb" : "#ffffff" }}
-                      >
-                        <td style={styles.td}>{s.id}</td>
-                        <td style={{ ...styles.td, fontWeight: 600 }}>{s.name}</td>
-                        <td style={styles.td}>{s.homeroom}</td>
-                        <td style={styles.td}>
-                          <span
-                            style={{
-                              ...styles.pill,
-                              background: s.status === "제작완료" ? "#d1fae5" : "#fef3c7",
-                              color: s.status === "제작완료" ? "#065f46" : "#92400e",
-                            }}
-                          >
-                            {s.status === "제작완료" ? "✅ 완료" : "⏳ 미등록"}
-                          </span>
+                  <tbody className="text-xs text-slate-700 divide-y divide-slate-100">
+                    {teachers.map((t) => (
+                      <tr key={t.name} className="hover:bg-slate-50">
+                        <td className="p-3 font-bold text-black">👤 {t.name}</td>
+                        <td className="p-3">
+                          <select value={t.type} onChange={(e) => handleMasterChangeRole(t.name, e.target.value, t.targetClass)} className="border border-slate-300 rounded px-2 py-1">
+                            <option value="원반담임">원반담임</option>
+                            <option value="특수담임">특수담임</option>
+                            <option value="학년부장">학년부장</option>
+                          </select>
                         </td>
-                        <td style={styles.td}>
-                          <a
-                            href={s.link}
-                            target="_blank"
-                            rel="noreferrer"
-                            style={styles.linkBtn}
-                          >
-                            앱 열기 →
-                          </a>
+                        <td className="p-3">
+                          <select value={t.targetClass} disabled={t.type !== "원반담임"} onChange={(e) => handleMasterChangeRole(t.name, t.type, e.target.value)} className="border border-slate-300 rounded px-2 py-1 disabled:opacity-30">
+                            <option value="all">전체 인가</option>
+                            <option value="2-1">2-1반</option><option value="2-3">2-3반</option><option value="2-4">2-4반</option>
+                            <option value="2-6">2-6반</option><option value="2-8">2-8반</option><option value="2-10">2-10반</option>
+                          </select>
+                        </td>
+                        <td className="p-3">
+                          <input type="text" placeholder={passwords[t.name] || "1111"} onChange={(e) => handleMasterChangePassword(t.name, e.target.value)} className="border border-slate-300 rounded px-2 py-1 font-mono text-xs w-24 text-blue-600 font-bold" />
+                        </td>
+                        <td className="p-3 text-center">
+                          <button onClick={() => handleMasterDeleteAccount(t.name)} className="text-red-500 hover:bg-red-50 font-bold px-2 py-1 rounded">제명</button>
                         </td>
                       </tr>
                     ))}
@@ -327,527 +507,259 @@ export default function TeacherDashboard() {
                 </table>
               </div>
             </div>
-
-            {/* 사용 안내 */}
-            <div style={styles.card}>
-              <h2 style={styles.cardTitle}>📌 교사 업무 안내</h2>
-              <ol style={styles.guideList}>
-                <li>각 학생의 시트명은 <code style={styles.code}>학번_이름</code> 형식을 유지해야 합니다.</li>
-                <li>시간표 변경 시 해당 시트를 수정하면 학생 화면에 즉시 반영됩니다.</li>
-                <li>창체 수업(자율·동아리·진로)은 매주 수업 교사/교실을 업데이트하세요.</li>
-                <li>알림장 시트에서 학생 개별 공지(<code style={styles.code}>학번_이름</code>) 또는 전체 공지(<code style={styles.code}>전체</code>)를 작성할 수 있습니다.</li>
-                <li>학생 링크 탭에서 개인 링크를 복사하여 각 학생에게 배부하세요.</li>
-              </ol>
-            </div>
           </div>
-        )}
 
-        {/* ══════════ 시간표 조회 탭 ══════════ */}
-        {tab === "schedule" && (
-          <div>
-            {/* 학생 선택 */}
-            <div style={styles.card}>
-              <h2 style={styles.cardTitle}>학생 선택</h2>
-              <div style={styles.studentBtnGrid}>
-                {STUDENTS.map((s) => (
-                  <button
-                    key={s.id}
-                    style={{
-                      ...styles.studentBtn,
-                      ...(selectedStudent.id === s.id ? styles.studentBtnActive : {}),
-                      opacity: s.status !== "제작완료" ? 0.5 : 1,
-                    }}
-                    onClick={() => setSelectedStudent(s)}
-                  >
-                    <span style={styles.studentBtnId}>{s.id}</span>
-                    <span style={styles.studentBtnName}>{s.name}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* 시간표 테이블 */}
-            <div style={styles.card}>
-              <div style={styles.scheduleTitleRow}>
-                <h2 style={styles.cardTitle}>
-                  {selectedStudent.name} ({selectedStudent.id}) · 주간 시간표
-                </h2>
-                <button
-                  style={styles.reloadBtn}
-                  onClick={() => loadSchedule(selectedStudent)}
-                  disabled={loadingSchedule}
-                >
-                  {loadingSchedule ? "불러오는 중…" : "🔄 새로고침"}
-                </button>
-              </div>
-
-              {selectedStudent.status !== "제작완료" ? (
-                <div style={styles.emptyBox}>⚠️ 아직 시간표 데이터가 등록되지 않은 학생입니다.</div>
-              ) : loadingSchedule ? (
-                <div style={styles.loadingBox}>시간표를 불러오는 중입니다…</div>
-              ) : weekSchedule ? (
-                <div style={styles.tableWrap}>
-                  <table style={styles.table}>
-                    <thead>
-                      <tr style={styles.thead}>
-                        <th style={{ ...styles.th, width: 80 }}>교시</th>
-                        {DAYS.map((d) => (
-                          <th
-                            key={d}
-                            style={{
-                              ...styles.th,
-                              background:
-                                d === currentDay ? "#dbeafe" : "#f3f4f6",
-                              color: d === currentDay ? "#1d4ed8" : "#374151",
-                            }}
-                          >
-                            {d}요일{d === currentDay ? " 🔵" : ""}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {PERIODS.map((period, pi) => (
-                        <tr
-                          key={period}
-                          style={{
-                            ...styles.tr,
-                            background:
-                              period === currentPeriod
-                                ? "#eff6ff"
-                                : pi % 2 === 0
-                                ? "#f9fafb"
-                                : "#ffffff",
-                          }}
-                        >
-                          <td style={{ ...styles.td, textAlign: "center", fontWeight: 700 }}>
-                            <div>{period}</div>
-                            <div style={{ fontSize: 11, color: "#9ca3af", fontWeight: 400 }}>
-                              {PERIOD_TIMES[period]}
-                            </div>
-                            {period === currentPeriod && (
-                              <div style={{ fontSize: 10, color: "#3b82f6" }}>▶ 현재</div>
-                            )}
-                          </td>
-                          {DAYS.map((day) => {
-                            const cell = weekSchedule[day]?.[period];
-                            const isHelp = cell?.room?.includes("학습도움실");
-                            return (
-                              <td
-                                key={day}
-                                style={{
-                                  ...styles.td,
-                                  background: isHelp ? "#fef9c3" : undefined,
-                                  textAlign: "center",
-                                  minWidth: 90,
-                                }}
-                              >
-                                {cell?.subject ? (
-                                  <>
-                                    <div style={{ fontWeight: 600, fontSize: 14 }}>
-                                      {cell.subject}
-                                    </div>
-                                    <div style={{ fontSize: 11, color: "#6b7280" }}>
-                                      {cell.teacher}
-                                    </div>
-                                    <div
-                                      style={{
-                                        fontSize: 11,
-                                        color: isHelp ? "#b45309" : "#9ca3af",
-                                        fontWeight: isHelp ? 600 : 400,
-                                      }}
-                                    >
-                                      {isHelp ? "🎈학습도움실" : cell.room}
-                                    </div>
-                                  </>
-                                ) : (
-                                  <span style={{ color: "#d1d5db", fontSize: 12 }}>—</span>
-                                )}
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div style={styles.emptyBox}>
-                  Google Sheets 연동 정보가 없거나 데이터를 불러오지 못했습니다.
-                  <br />
-                  <code style={styles.code}>.env.local</code>에{" "}
-                  <code style={styles.code}>NEXT_PUBLIC_GOOGLE_API_KEY</code>,{" "}
-                  <code style={styles.code}>NEXT_PUBLIC_SPREADSHEET_ID</code>가 설정되어 있는지 확인하세요.
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ══════════ 알림장 탭 ══════════ */}
-        {tab === "notice" && (
-          <div style={styles.card}>
-            <div style={styles.scheduleTitleRow}>
-              <h2 style={styles.cardTitle}>알림장 전체 조회</h2>
-              <button
-                style={styles.reloadBtn}
-                onClick={loadNotices}
-                disabled={loadingNotice}
-              >
-                {loadingNotice ? "불러오는 중…" : "🔄 새로고침"}
-              </button>
-            </div>
-            <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 16 }}>
-              Google Sheets의 <strong>알림장</strong> 시트 내용을 조회합니다.
-              내용 수정은 Google Sheets에서 직접 진행하세요.
-            </p>
-
-            {loadingNotice ? (
-              <div style={styles.loadingBox}>알림장을 불러오는 중입니다…</div>
-            ) : notices.length === 0 ? (
-              <div style={styles.emptyBox}>알림장 데이터가 없거나 연동 정보를 확인하세요.</div>
-            ) : (
-              <div style={styles.noticeList}>
-                {/* 전체 공지 먼저 */}
-                {notices
-                  .filter((n) => n.target === "전체")
-                  .map((n, i) => (
-                    <div key={`all-${i}`} style={{ ...styles.noticeCard, borderLeft: "4px solid #3b82f6" }}>
-                      <div style={styles.noticeHeader}>
-                        <span style={{ ...styles.noticePill, background: "#dbeafe", color: "#1d4ed8" }}>
-                          📢 전체 공지
-                        </span>
-                        <span style={styles.noticeWriter}>{n.writer} 선생님</span>
-                      </div>
-                      <p style={styles.noticeContent}>{n.content}</p>
-                    </div>
-                  ))}
-                {/* 개별 공지 */}
-                {notices
-                  .filter((n) => n.target !== "전체")
-                  .map((n, i) => {
-                    const student = STUDENTS.find(
-                      (s) => n.target.startsWith(s.id) || n.target.endsWith(s.name)
-                    );
-                    return (
-                      <div key={`ind-${i}`} style={{ ...styles.noticeCard, borderLeft: "4px solid #10b981" }}>
-                        <div style={styles.noticeHeader}>
-                          <span style={{ ...styles.noticePill, background: "#d1fae5", color: "#065f46" }}>
-                            👤 {n.target}
-                          </span>
-                          {n.writer && (
-                            <span style={styles.noticeWriter}>{n.writer} 선생님</span>
-                          )}
-                        </div>
-                        {n.content && <p style={styles.noticeContent}>{n.content}</p>}
-                      </div>
-                    );
-                  })}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ══════════ 학생 링크 탭 ══════════ */}
-        {tab === "links" && (
-          <div style={styles.card}>
-            <h2 style={styles.cardTitle}>학생 개별 접속 링크</h2>
-            <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 20 }}>
-              각 학생에게 복사 버튼으로 링크를 전달하세요. 로그인 없이 바로 접속 가능합니다.
-            </p>
-            <div style={styles.linkGrid}>
-              {STUDENTS.map((s) => (
-                <div key={s.id} style={styles.linkCard}>
-                  <div style={styles.linkCardTop}>
-                    <div>
-                      <div style={styles.linkStudentName}>{s.name}</div>
-                      <div style={styles.linkStudentId}>{s.id} · {s.homeroom} 반</div>
-                    </div>
-                    <span
-                      style={{
-                        ...styles.pill,
-                        background: s.status === "제작완료" ? "#d1fae5" : "#fef3c7",
-                        color: s.status === "제작완료" ? "#065f46" : "#92400e",
-                        fontSize: 11,
-                      }}
-                    >
-                      {s.status === "제작완료" ? "✅ 완료" : "⏳ 미등록"}
-                    </span>
-                  </div>
-                  <div style={styles.linkUrl}>{s.link}</div>
-                  <div style={styles.linkActions}>
-                    <a href={s.link} target="_blank" rel="noreferrer" style={styles.linkOpenBtn}>
-                      열기 →
-                    </a>
-                    <button
-                      style={{
-                        ...styles.copyBtn,
-                        background: copiedId === s.id ? "#059669" : "#3b82f6",
-                      }}
-                      onClick={() => copyLink(s)}
-                    >
-                      {copiedId === s.id ? "✓ 복사됨!" : "링크 복사"}
-                    </button>
-                  </div>
+          <div className="bg-white border border-[#DCE4EC] rounded-2xl p-5 shadow-sm flex flex-col h-[480px]">
+            <h2 className="text-sm font-black text-[#1E3A8A] border-b border-slate-100 pb-2 mb-3">
+              🖥️ 실시간 인트라넷 코어 로그 스트림
+            </h2>
+            <div className="flex-1 bg-slate-900 text-emerald-400 p-3 rounded-xl font-mono text-[10px] space-y-1 overflow-y-auto shadow-inner">
+              {systemLogs.map(log => (
+                <div key={log.id} className="opacity-95">
+                  <span className="text-slate-500">[{log.time}]</span> <span className="text-blue-400">[{log.level}]</span> {log.msg}
                 </div>
               ))}
             </div>
           </div>
-        )}
+        </main>
+      </div>
+    );
+  }
+
+  // --- 🧑‍🏫 9. [뷰 렌더링 3] 일반/특수교사 종합 행정 라이트 블루 포털 메인 뷰 ---
+  const isSpecialMaster = currentTeacher.type === "특수담임";
+
+  return (
+    <div className="min-h-screen bg-[#F0F4F8] text-[#333333] font-sans flex flex-col antialiased relative">
+      {/* 🚀 상단 프로그레스 바 (선생님 로직 연동) */}
+      <div className="w-full fixed top-0 left-0 z-50 h-1.5 bg-neutral-200">
+        <div className="h-full bg-[#2563EB] transition-all duration-1000 ease-out" style={{ width: `${progress}%` }} />
+      </div>
+
+      <header className="w-full bg-white border-b-2 border-[#1E40AF]/10 px-8 py-4 flex justify-between items-center shadow-sm mt-1.5">
+        <div className="flex items-center gap-3">
+          <Image src="/build_logo.png" alt="진해고" width={36} height={36} className="object-contain" />
+          <div>
+            <h1 className="text-base font-extrabold text-[#1E3A8A] tracking-tight">진해고등학교 교육행정 통합시스템 업무포털</h1>
+            <p className="text-[11px] text-[#4B5563] font-bold flex items-center gap-1.5 mt-0.5">
+              <span className={`inline-block w-2 h-2 rounded-full ${isLoading ? 'bg-amber-400' : 'bg-green-500 animate-pulse'}`}></span>
+              {isLoading ? "구글 시트 데이터 바인딩 중..." : "구글 시트 실시간 데이터 노드 동기화 완료"}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-4 text-xs font-bold">
+          <div className="bg-[#EFF6FF] border border-[#BFDBFE] text-[#1E40AF] px-3 py-1.5 rounded-xl font-mono flex items-center gap-1.5 shadow-sm">
+            🕒 실시간 일과: <span className="font-extrabold text-blue-700 underline">{currentPeriod}</span> 
+            {timeLeft && <span className="text-xs text-neutral-500 font-normal">({timeLeft})</span>}
+          </div>
+
+          <Link href="/teacher/notice" className="bg-[#1E40AF] hover:bg-[#1D4ED8] text-white px-4 py-1.5 rounded-xl flex items-center gap-1 shadow-sm transition-all">
+            📢 <span className="underline">업무협의 포럼</span>
+          </Link>
+
+          <div className="bg-slate-100 border border-slate-200 px-4 py-1.5 rounded-xl text-slate-700 shadow-sm">
+            🔒 {currentTeacher.type} : <span className="text-black font-black">{currentTeacher.name} 선생님</span>
+          </div>
+
+          <button onClick={handleLogout} className="bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 px-3 py-1.5 rounded-xl flex items-center gap-1 shadow-sm transition-all">
+            ❌ <span>로그아웃</span>
+          </button>
+        </div>
+      </header>
+
+      <main className="max-w-7xl w-full mx-auto p-6 space-y-6 flex-1 flex flex-col">
+        {/* 현황 대시보드 팩 */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="bg-white border border-[#DCE4EC] rounded-2xl p-4 shadow-sm flex justify-between items-center">
+            <div>
+              <span className="text-[11px] font-bold text-slate-400 block">총 관제 대상자 명단</span>
+              <span className="text-xl font-black text-slate-800 font-mono mt-0.5 block">{authorizedStudents.length}명</span>
+            </div>
+            <span className="text-2xl opacity-80">📋</span>
+          </div>
+          <div className="bg-white border border-[#DCE4EC] rounded-2xl p-4 shadow-sm flex justify-between items-center">
+            <div>
+              <span className="text-[11px] font-bold text-blue-500 block">학습도움실 내재 수업</span>
+              <span className="text-xl font-black text-[#2563EB] font-mono mt-0.5 block">{authorizedStudents.filter(s => s.location === "학습도움실" || s.location === "도움반").length}명</span>
+            </div>
+            <span className="text-2xl opacity-80">🏫</span>
+          </div>
+          <div className="bg-white border border-[#DCE4EC] rounded-2xl p-4 shadow-sm flex justify-between items-center">
+            <div>
+              <span className="text-[11px] font-bold text-purple-500 block">원반 이동 수업 대상</span>
+              <span className="text-xl font-black text-[#8B5CF6] font-mono mt-0.5 block">{authorizedStudents.filter(s => s.location !== "학습도움실" && s.location !== "도움반").length}명</span>
+            </div>
+            <span className="text-2xl opacity-80">🏃</span>
+          </div>
+          <div className="bg-white border border-[#DCE4EC] rounded-2xl p-4 shadow-sm flex justify-between items-center">
+            <div>
+              <span className="text-[11px] font-bold text-amber-500 block">집중 케어 필요 요망</span>
+              <span className="text-xl font-black text-[#D97706] font-mono mt-0.5 block">{authorizedStudents.filter(s => s.status !== "정상").length}명</span>
+            </div>
+            <span className="text-2xl opacity-80">⚠️</span>
+          </div>
+        </div>
+
+        {/* 실시간 트래킹 데이터 랙 */}
+        <div className="bg-white border border-[#DCE4EC] rounded-2xl p-6 shadow-sm flex-1 flex flex-col">
+          <div className="mb-4 flex flex-col sm:flex-row justify-between sm:items-center gap-2">
+            <div>
+              <h2 className="text-sm font-extrabold text-[#1E3A8A] flex items-center gap-1.5">
+                🔎 실시간 특수학급 분산수업 동향 트래킹 매트릭스
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">구글 시트 연동 데이터를 기반으로 표출됩니다. 학생을 클릭하여 1:1 교차 지침 피드 및 알림장 로그를 관제하십시오.</p>
+            </div>
+            <div className="flex gap-1.5 text-xs font-bold">
+              {["전체", "도움반", "통합학급"].map((filter) => (
+                <button key={filter} onClick={() => setStatusFilter(filter)} className={`px-3 py-1.5 rounded-lg border transition-all ${statusFilter === filter ? "bg-[#2563EB] text-white border-[#2563EB]" : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50"}`}>
+                  {filter}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="overflow-hidden border border-slate-200 rounded-xl bg-white flex-1">
+            <table className="w-full text-left border-collapse">
+              <thead className="bg-[#F8FAFC] border-b border-slate-200 text-xs text-slate-500 font-extrabold">
+                <tr>
+                  <th className="p-3.5">반정보</th>
+                  <th className="p-3.5">학번</th>
+                  <th className="p-3.5">이름</th>
+                  <th className="p-3.5">현재 실시간 물리 위치</th>
+                  <th className="p-3.5">행동 안전 동향</th>
+                </tr>
+              </thead>
+              <tbody className="text-xs font-semibold text-slate-700 divide-y divide-slate-100">
+                {filteredStudents.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="p-8 text-center text-slate-400 font-bold">현재 인가된 소속 분산 학생 전산 데이터가 없습니다.</td>
+                  </tr>
+                ) : (
+                  filteredStudents.map((student) => (
+                    <tr key={student.id} onClick={() => setSelectedStudent(student)} className="hover:bg-blue-50/40 cursor-pointer transition-colors border-l-4 border-transparent hover:border-blue-500">
+                      <td className="p-3.5"><span className="bg-blue-50 text-blue-600 border border-blue-200 px-2 py-0.5 rounded font-bold text-[10px]">{student.classCode}반</span></td>
+                      <td className="p-3.5 font-mono text-slate-400">{student.id}</td>
+                      <td className="p-3.5 font-extrabold text-slate-900">{student.name}</td>
+                      <td className="p-3.5 font-bold text-blue-600">📍 {student.location}</td>
+                      <td className="p-3.5">
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${student.status === "정상" ? "bg-emerald-50 text-emerald-600 border border-emerald-200" : "bg-amber-50 text-amber-600 border border-amber-200"}`}>
+                          {student.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* 하단 공용 인계록 장치 */}
+        <section className="bg-gradient-to-r from-[#FFFBEB] to-[#FEF3C7] border border-[#FDE68A] rounded-2xl p-5 shadow-sm">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-lg">✍️</span>
+            <h2 className="text-sm font-extrabold text-[#92400E]">학습도움실 내부 기밀 안건 및 특수교사 인계사항 (교직원 전체 공유 전산망)</h2>
+          </div>
+          <textarea value={sharedMemo} readOnly={!isSpecialMaster} onChange={(e) => setSharedMemo(e.target.value)} placeholder="특수학급 정담임 교사만 인계 안건 수정 권한이 인가됩니다." className="w-full bg-white/70 border border-[#FCD34D] rounded-xl p-3 text-xs text-[#78350F] font-bold h-20 resize-none focus:outline-none focus:bg-white transition-all shadow-inner" />
+          {!isSpecialMaster && <p className="text-[10px] text-[#B45309] font-bold mt-1">※ 원반 담임 및 학년부장 교사는 읽기 전용 모드입니다. 수정은 특수 전담 교사 교무망을 통해서만 활성화됩니다.</p>}
+        </section>
       </main>
 
-      <footer style={styles.footer}>
-        진해고등학교 특수학급 일과운영 지원 APP · 제작 민석준 · 2026
-      </footer>
+      {/* 🔮 [구글 시트 연동 기반 주간 시간표/알림장/1:1 피드 연동 종합 관제 모달] */}
+      {selectedStudent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white border border-slate-300 w-full max-w-5xl rounded-2xl p-6 shadow-2xl relative flex flex-col max-h-[85vh] overflow-hidden">
+            <button onClick={() => setSelectedStudent(null)} className="absolute top-4 right-4 text-slate-400 hover:text-black text-lg bg-slate-100 w-8 h-8 rounded-full flex items-center justify-center transition-colors">✕</button>
+            
+            <div className="border-b border-slate-200 pb-3 mb-4">
+              <span className="text-[10px] bg-blue-100 text-blue-700 font-extrabold px-2.5 py-0.5 rounded border border-blue-200 uppercase">{selectedStudent.classCode} 통합 관제</span>
+              <h3 className="text-lg font-black text-slate-900 mt-1">
+                {selectedStudent.name} 학생 실시간 정보 원장 
+                <span className="text-xs text-slate-400 font-mono ml-2">(학번 ID: {selectedStudent.id})</span>
+              </h3>
+            </div>
+
+            {/* 3단 통합 관제 콘솔 인프라 */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 overflow-y-auto pb-2">
+              
+              {/* 1단: 학생용 화면과 100% 동일한 '주간' 구글 시트 시간표 목록 매핑 */}
+              <div className="space-y-2">
+                <h4 className="text-xs font-black text-[#1E3A8A] flex items-center gap-1">📅 주간 전체 시간표 매트릭스</h4>
+                <div className="border border-slate-200 rounded-xl overflow-hidden text-[11px] bg-white">
+                  <div className="grid grid-cols-6 bg-slate-50 text-slate-500 font-bold border-b border-slate-200 text-center py-1.5">
+                    <div>교시</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div>
+                  </div>
+                  {/* 구글 시트 연동 데이터 (sheetTimelines) 또는 Fallback 빈칸 렌더링 */}
+                  {Array.from({ length: 7 }).map((_, periodIdx) => (
+                    <div key={periodIdx} className="grid grid-cols-6 border-b border-slate-100 last:border-b-0 text-center py-2 items-center">
+                      <div className="font-bold text-blue-500 bg-blue-50/50 h-full flex items-center justify-center">{periodIdx + 1}</div>
+                      {Array.from({ length: 5 }).map((_, dayIdx) => {
+                        // 선생님의 구글 시트 데이터 구조가 timelines["20110"][dayIndex][periodIdx] 형태일 경우를 가정한 매핑
+                        const dayData = sheetTimelines[selectedStudent.id]?.[dayIdx];
+                        const subject = dayData ? dayData[periodIdx] : "공통";
+                        return <div key={dayIdx} className="text-slate-700 font-medium truncate px-0.5">{subject}</div>;
+                      })}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 2단: 전산망에서 주입된 실시간 공통/개인 알림장 출력 컴포넌트 */}
+              <div className="space-y-2">
+                <h4 className="text-xs font-black text-[#1E3A8A] flex items-center gap-1">📢 구글 시트 바인딩 실시간 알림장 로그</h4>
+                <div className="bg-amber-50/60 border border-amber-200 rounded-xl p-3 space-y-2 min-h-[250px] max-h-[350px] overflow-y-auto shadow-inner">
+                  {(!sheetNotices[selectedStudent.id] || sheetNotices[selectedStudent.id].length === 0) ? (
+                    <p className="text-center text-amber-800/40 font-bold py-12 text-xs">현재 시트에 배포된 해당 학생의 알림장이 없습니다.</p>
+                  ) : (
+                    sheetNotices[selectedStudent.id].map((notice, idx) => (
+                      <div key={idx} className="bg-white p-3 rounded-xl border border-amber-200 shadow-sm text-[11px] leading-relaxed text-amber-950 font-semibold">
+                        <div className="flex justify-between items-center text-[9px] mb-1.5 font-bold">
+                          <span className={`px-1.5 py-0.5 rounded-full ${notice.target === "전체" ? "bg-blue-100 text-blue-600" : "bg-purple-100 text-purple-600"}`}>
+                            [{notice.target}]
+                          </span>
+                          <span className="text-slate-400">발송: {notice.teacher} 교사</span>
+                        </div>
+                        <p className="whitespace-pre-wrap">{notice.content}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* 3단: 1:1 교직원 실시간 소통 다이어리 (모든 권한 프리 피드) */}
+              <div className="space-y-2 flex flex-col">
+                <h4 className="text-xs font-black text-[#1E3A8A] flex items-center gap-1">💬 교직원 실시간 연계 소통 피드</h4>
+                <div className="flex-1 bg-slate-50 p-3 rounded-xl border border-slate-200 overflow-y-auto space-y-2 min-h-[250px] max-h-[350px]">
+                  {(studentFeeds[selectedStudent.id] || []).length === 0 ? (
+                    <p className="text-center text-slate-400 font-medium py-12 text-[11px]">기록된 피드가 없습니다. 실시간 연계 지침을 작성하세요.</p>
+                  ) : (
+                    (studentFeeds[selectedStudent.id] || []).map((feed: any, idx: number) => {
+                      const isMe = feed.sender === currentTeacher.name;
+                      return (
+                        <div key={idx} className={`flex flex-col ${isMe ? "items-end" : "items-start"}`}>
+                          <span className="text-[9px] text-slate-400 font-extrabold mb-0.5">{feed.sender} ({feed.role})</span>
+                          <div className={`p-2.5 rounded-xl text-[11px] font-semibold max-w-[220px] leading-tight ${isMe ? "bg-[#2563EB] text-white rounded-tr-none shadow-sm" : "bg-white text-slate-800 border border-slate-200 rounded-tl-none shadow-sm"}`}>
+                            {feed.text}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                <div className="flex gap-1.5 mt-2">
+                  <input type="text" placeholder="모든 교사 공용 작성 란..." value={newFeedText} onChange={(e) => setNewFeedText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") handleAddFeed(selectedStudent.id); }} className="flex-1 px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-sm" />
+                  <button onClick={() => handleAddFeed(selectedStudent.id)} className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold text-xs px-4 rounded-xl transition-colors shadow-sm">
+                    입력
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-
-// ──────────────────────────────────────────────────────────
-// 스타일 (inline — Next.js CSS 모듈 없이도 동작)
-// ──────────────────────────────────────────────────────────
-const styles: Record<string, React.CSSProperties> = {
-  container: {
-    fontFamily: "'Pretendard', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif",
-    minHeight: "100vh",
-    background: "#f1f5f9",
-    color: "#1e293b",
-  },
-  header: {
-    background: "linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%)",
-    color: "#fff",
-    padding: "20px 32px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    flexWrap: "wrap" as const,
-    gap: 16,
-  },
-  headerLeft: { display: "flex", alignItems: "center", gap: 16 },
-  badge: {
-    background: "rgba(255,255,255,0.2)",
-    borderRadius: 8,
-    padding: "4px 12px",
-    fontSize: 12,
-    fontWeight: 700,
-    letterSpacing: "0.05em",
-    border: "1px solid rgba(255,255,255,0.3)",
-  },
-  title: { margin: 0, fontSize: 22, fontWeight: 800 },
-  subtitle: { margin: 0, fontSize: 13, opacity: 0.75, marginTop: 2 },
-  clock: { textAlign: "right" as const },
-  clockTime: { fontSize: 28, fontWeight: 800, fontVariantNumeric: "tabular-nums" },
-  clockSub: { fontSize: 12, opacity: 0.75, marginTop: 2 },
-  nav: {
-    display: "flex",
-    gap: 0,
-    background: "#fff",
-    borderBottom: "1px solid #e2e8f0",
-    padding: "0 24px",
-    overflowX: "auto" as const,
-  },
-  tabBtn: {
-    padding: "14px 20px",
-    border: "none",
-    background: "transparent",
-    cursor: "pointer",
-    fontSize: 14,
-    fontWeight: 500,
-    color: "#64748b",
-    borderBottom: "3px solid transparent",
-    whiteSpace: "nowrap" as const,
-    transition: "all 0.15s",
-  },
-  tabBtnActive: {
-    color: "#2563eb",
-    borderBottom: "3px solid #2563eb",
-    fontWeight: 700,
-  },
-  main: { padding: "24px", maxWidth: 1200, margin: "0 auto" },
-  cardRow: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-    gap: 16,
-    marginBottom: 24,
-  },
-  statCard: {
-    borderRadius: 16,
-    padding: "20px 24px",
-    color: "#fff",
-    boxShadow: "0 4px 12px rgba(0,0,0,0.12)",
-  },
-  statNum: { fontSize: 36, fontWeight: 900, lineHeight: 1 },
-  statLabel: { fontSize: 13, opacity: 0.9, marginTop: 6 },
-  card: {
-    background: "#fff",
-    borderRadius: 16,
-    padding: 24,
-    marginBottom: 24,
-    boxShadow: "0 1px 4px rgba(0,0,0,0.06), 0 0 0 1px #e2e8f0",
-  },
-  cardTitle: { margin: "0 0 16px 0", fontSize: 17, fontWeight: 700, color: "#0f172a" },
-  tableWrap: { overflowX: "auto" as const },
-  table: { width: "100%", borderCollapse: "collapse" as const, fontSize: 14 },
-  thead: { background: "#f3f4f6" },
-  th: {
-    padding: "10px 14px",
-    textAlign: "left" as const,
-    fontWeight: 700,
-    fontSize: 13,
-    color: "#374151",
-    borderBottom: "2px solid #e5e7eb",
-  },
-  tr: { borderBottom: "1px solid #f3f4f6", transition: "background 0.1s" },
-  td: { padding: "10px 14px", verticalAlign: "middle" as const },
-  pill: {
-    display: "inline-block",
-    padding: "3px 10px",
-    borderRadius: 20,
-    fontSize: 12,
-    fontWeight: 600,
-  },
-  linkBtn: {
-    color: "#2563eb",
-    textDecoration: "none",
-    fontWeight: 600,
-    fontSize: 13,
-  },
-  guideList: { paddingLeft: 20, lineHeight: 2, fontSize: 14, color: "#374151", margin: 0 },
-  code: {
-    background: "#f1f5f9",
-    borderRadius: 4,
-    padding: "1px 6px",
-    fontSize: 12,
-    fontFamily: "monospace",
-    color: "#0f172a",
-  },
-  studentBtnGrid: {
-    display: "flex",
-    flexWrap: "wrap" as const,
-    gap: 8,
-  },
-  studentBtn: {
-    display: "flex",
-    flexDirection: "column" as const,
-    alignItems: "center",
-    padding: "10px 16px",
-    border: "2px solid #e2e8f0",
-    borderRadius: 12,
-    background: "#f8fafc",
-    cursor: "pointer",
-    transition: "all 0.15s",
-    minWidth: 80,
-  },
-  studentBtnActive: {
-    border: "2px solid #2563eb",
-    background: "#eff6ff",
-  },
-  studentBtnId: { fontSize: 11, color: "#6b7280", fontWeight: 500 },
-  studentBtnName: { fontSize: 15, fontWeight: 700, color: "#1e293b", marginTop: 2 },
-  scheduleTitleRow: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 16,
-    flexWrap: "wrap" as const,
-    gap: 8,
-  },
-  reloadBtn: {
-    padding: "8px 16px",
-    border: "1px solid #e2e8f0",
-    borderRadius: 8,
-    background: "#f8fafc",
-    cursor: "pointer",
-    fontSize: 13,
-    fontWeight: 600,
-    color: "#374151",
-  },
-  emptyBox: {
-    background: "#fef9c3",
-    border: "1px solid #fde68a",
-    borderRadius: 10,
-    padding: "20px 24px",
-    color: "#78350f",
-    fontSize: 14,
-    lineHeight: 1.8,
-  },
-  loadingBox: {
-    padding: "40px",
-    textAlign: "center" as const,
-    color: "#6b7280",
-    fontSize: 14,
-  },
-  noticeList: { display: "flex", flexDirection: "column" as const, gap: 12 },
-  noticeCard: {
-    background: "#f8fafc",
-    borderRadius: 12,
-    padding: "14px 18px",
-    border: "1px solid #e2e8f0",
-  },
-  noticeHeader: { display: "flex", alignItems: "center", gap: 10, marginBottom: 8 },
-  noticePill: {
-    display: "inline-block",
-    padding: "3px 10px",
-    borderRadius: 20,
-    fontSize: 12,
-    fontWeight: 700,
-  },
-  noticeWriter: { fontSize: 12, color: "#6b7280" },
-  noticeContent: { margin: 0, fontSize: 14, lineHeight: 1.7, color: "#1e293b", whiteSpace: "pre-wrap" as const },
-  linkGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
-    gap: 16,
-  },
-  linkCard: {
-    border: "1px solid #e2e8f0",
-    borderRadius: 12,
-    padding: 16,
-    background: "#f8fafc",
-  },
-  linkCardTop: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 10 },
-  linkStudentName: { fontSize: 17, fontWeight: 700, color: "#0f172a" },
-  linkStudentId: { fontSize: 12, color: "#6b7280", marginTop: 2 },
-  linkUrl: {
-    fontSize: 11,
-    color: "#6b7280",
-    background: "#e2e8f0",
-    borderRadius: 6,
-    padding: "6px 10px",
-    marginBottom: 10,
-    wordBreak: "break-all" as const,
-  },
-  linkActions: { display: "flex", gap: 8 },
-  linkOpenBtn: {
-    flex: 1,
-    textAlign: "center" as const,
-    padding: "8px",
-    border: "1px solid #cbd5e1",
-    borderRadius: 8,
-    fontSize: 13,
-    fontWeight: 600,
-    color: "#374151",
-    textDecoration: "none",
-    background: "#fff",
-  },
-  copyBtn: {
-    flex: 1,
-    padding: "8px",
-    border: "none",
-    borderRadius: 8,
-    fontSize: 13,
-    fontWeight: 700,
-    color: "#fff",
-    cursor: "pointer",
-    transition: "background 0.2s",
-  },
-  footer: {
-    textAlign: "center" as const,
-    padding: "20px",
-    fontSize: 12,
-    color: "#94a3b8",
-    borderTop: "1px solid #e2e8f0",
-    background: "#fff",
-    marginTop: 8,
-  },
-};
