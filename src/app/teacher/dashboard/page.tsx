@@ -452,7 +452,7 @@ useEffect(() => {
   };
 
   // --- 8. 관리자 모드: 계정 제어 기능 ---
-  const handleCreateAccountAdmin = () => {
+const handleCreateAccountAdmin = () => {
     if (!newAccId.trim() || !newAccName.trim()) {
       alert("아이디와 교사명을 기입하세요.");
       return;
@@ -462,11 +462,16 @@ useEffect(() => {
       return;
     }
 
+    // 💡 1. 신규 생성 시 다중 학급 콤마 및 띄어쓰기 정제 로직
+    const refinedNewClass = newAccClass
+      ? newAccClass.split(",").map(c => c.trim()).filter(Boolean).join(", ")
+      : "";
+
     const newAcc: UserAccount = {
       id: newAccId,
       name: newAccName,
       role: newAccRole,
-      targetClass: newAccClass,
+      targetClass: refinedNewClass, // ✨ 정제된 학급 데이터 대입
       password: newAccPw,
       subject: newAccSubj || "미정",
     };
@@ -478,6 +483,8 @@ useEffect(() => {
     
     setNewAccId("");
     setNewAccName("");
+    // (선택 사항) 입력창도 깨끗하게 비워주기 위해 추가
+    // setNewAccClass(""); 
     alert("신규 계정이 마스터 DB에 안전하게 마운트되었습니다.");
   };
 
@@ -494,6 +501,7 @@ useEffect(() => {
 
   // 관리자 권한 계정 수정 저장 (ID 및 과목 변경 스위칭 로직 반영)
   const handleSaveEditAccount = () => {
+    
     if (!editingAccountId) return;
     
     // ID 변경 시 중복 검증 (내 원래 아이디가 아닌 다른 아이디로 바꾸려는데 이미 존재하는 경우)
@@ -502,6 +510,11 @@ useEffect(() => {
       return;
     }
 
+    // 💡 2. 기존 계정 수정 저장 시 다중 학급 콤마 및 띄어쓰기 정제 로직
+    const refinedEditClass = editAccClass
+      ? editAccClass.split(",").map(c => c.trim()).filter(Boolean).join(", ")
+      : "";
+
     const updated = accounts.map((a) => {
       if (a.id === editingAccountId) {
         return {
@@ -509,7 +522,7 @@ useEffect(() => {
           id: editAccId, // 💡 ID 강제 수정 반영
           name: editAccName,
           role: editAccRole,
-          targetClass: editAccClass,
+          targetClass: refinedEditClass, // ✨ 정제된 학급 데이터 대입
           password: editAccPw,
           subject: editAccSubj, // 💡 과목 강제 수정 반영
         };
