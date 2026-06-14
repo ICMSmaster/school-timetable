@@ -777,21 +777,40 @@ useEffect(() => {
 
                 <div className="bg-slate-50 border p-4 rounded-xl space-y-2">
                   <span className="block text-xs font-black text-slate-500">🔒 공지 대상자 지정(복수 선택 가능)</span>
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    <button onClick={() => handleToggleTarget("전체(all)")} className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${newPostTargets.includes("all") ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-700 hover:bg-slate-100"}`}>전체 교사 공개</button>
-                    <button onClick={() => handleToggleTarget("특수담임(고장선, 김다해, 임선곤)")} className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${newPostTargets.includes("특수담임") ? "bg-purple-600 text-white border-purple-600" : "bg-white text-slate-700 hover:bg-slate-100"}`}>특수담임만</button>
-                    <button onClick={() => handleToggleTarget("학년부장")} className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${newPostTargets.includes("학년부장") ? "bg-purple-600 text-white border-purple-600" : "bg-white text-slate-700 hover:bg-slate-100"}`}>학년부장만</button>
-                    
-                    {accounts.filter(a => a.role === "학급담임").map((teacher) => (
-                      <button key={teacher.id} onClick={() => handleToggleTarget(teacher.id)} className={`px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-all ${newPostTargets.includes(teacher.id) ? "bg-[#2563EB] text-white border-[#2563EB]" : "bg-white text-slate-600 hover:bg-slate-100"}`}>
-                        {teacher.name} ({teacher.targetClass})
-                      </button>
-                    ))}
-                  </div>
-                  <div className="text-[11px] text-slate-400 font-bold pt-1">현재 선택된 공지 대상 : {getReadableTargets(newPostTargets)}</div>
-                  <div className="text-right pt-2">
-                    <button onClick={handleCreatePost} className="bg-[#2563EB] hover:bg-[#1E40AF] text-white text-xs font-black px-6 py-2.5 rounded-xl shadow-xs">공지 작성</button>
-                  </div>
+<div className="flex flex-wrap gap-2 pt-1">
+  {/* 💡 "all"로 값을 통일하여 매칭 성공 */}
+  <button 
+    onClick={() => handleToggleTarget("all")} 
+    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${newPostTargets.includes("all") ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-700 hover:bg-slate-100"}`}
+  >
+    전체 교사 공개
+  </button>
+  
+  {/* 💡 "특수담임"으로 값을 통일하여 매칭 성공 */}
+  <button 
+    onClick={() => handleToggleTarget("특수담임")} 
+    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${newPostTargets.includes("특수담임") ? "bg-purple-600 text-white border-purple-600" : "bg-white text-slate-700 hover:bg-slate-100"}`}
+  >
+    특수담임만 (고장선, 김다해, 임선곤)
+  </button>
+  
+  <button 
+    onClick={() => handleToggleTarget("학년부장")} 
+    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${newPostTargets.includes("학년부장") ? "bg-purple-600 text-white border-purple-600" : "bg-white text-slate-700 hover:bg-slate-100"}`}
+  >
+    학년부장만
+  </button>
+  
+  {accounts.filter(a => a.role === "학급담임").map((teacher) => (
+    <button key={teacher.id} onClick={() => handleToggleTarget(teacher.id)} className={`px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-all ${newPostTargets.includes(teacher.id) ? "bg-[#2563EB] text-white border-[#2563EB]" : "bg-white text-slate-600 hover:bg-slate-100"}`}>
+      {teacher.name} ({teacher.targetClass})
+    </button>
+  ))}
+</div>
+<div className="text-[11px] text-slate-400 font-bold pt-1">현재 선택된 공지 대상 : {getReadableTargets(newPostTargets)}</div>
+<div className="text-right pt-2">
+  <button onClick={handleCreatePost} className="bg-[#2563EB] hover:bg-[#1E40AF] text-white text-xs font-black px-6 py-2.5 rounded-xl shadow-xs">공지 작성</button>
+</div>
                 </div>
               </div>
             )}
