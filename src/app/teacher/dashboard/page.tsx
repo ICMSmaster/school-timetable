@@ -74,13 +74,13 @@ interface SuggestionItem {
 // --- 마스터 데이터 (초기 복구용) ---
 const INITIAL_STUDENTS: Student[] = [
   { id: "20110", name: "김한얼", homeroom: "김대홍", gradeClass: "2-1" },
-  { id: "20121", name: "이정준", homeroom: "김대홍", gradeClass: "2-1" },
+  { id: "20121", name: "이정준(통합학급)", homeroom: "김대홍", gradeClass: "2-1" },
   { id: "20306", name: "김현중", homeroom: "김수민", gradeClass: "2-3" },
   { id: "20311", name: "박진현", homeroom: "김수민", gradeClass: "2-3" },
-  { id: "20402", name: "강민준", homeroom: "정은영", gradeClass: "2-4" },
-  { id: "20406", name: "김세현", homeroom: "정은영", gradeClass: "2-4" },
+  { id: "20402", name: "강민준(통합학급)", homeroom: "정은영", gradeClass: "2-4" },
+  { id: "20406", name: "김세현(통합학급)", homeroom: "정은영", gradeClass: "2-4" },
   { id: "20418", name: "손민찬", homeroom: "정은영", gradeClass: "2-4" },
-  { id: "20612", name: "손찬信", homeroom: "서한성", gradeClass: "2-6" },
+  { id: "20612", name: "손찬민", homeroom: "서한성", gradeClass: "2-6" },
   { id: "20616", name: "오승철", homeroom: "서한성", gradeClass: "2-6" },
   { id: "20813", name: "박찬석", homeroom: "여지언", gradeClass: "2-8" },
   { id: "20906", name: "김재원", homeroom: "서용환", gradeClass: "2-9" },
@@ -150,37 +150,38 @@ export default function IntegratedTeacherPortal() {
   const [editAccSubj, setEditAccSubj] = useState(""); // 💡 과목 수정을 위한 상태 추가
 
   // --- 1. LocalStorage 기반 영구 보존 로직 ---
-  useEffect(() => {
-    const savedAcc = localStorage.getItem("zh_accounts");
-    if (savedAcc) setAccounts(JSON.parse(savedAcc));
-    else {
-      setAccounts(INITIAL_ACCOUNTS);
-      localStorage.setItem("zh_accounts", JSON.stringify(INITIAL_ACCOUNTS));
-    }
+useEffect(() => {
+  // 1. 마스터 계정 데이터 로드 및 초기화
+  const savedAcc = localStorage.getItem("zh_accounts");
+  if (savedAcc) setAccounts(JSON.parse(savedAcc));
+  else {
+    setAccounts(INITIAL_ACCOUNTS);
+    localStorage.setItem("zh_accounts", JSON.stringify(INITIAL_ACCOUNTS));
+  }
 
-    const savedPosts = localStorage.getItem("zh_posts");
-    if (savedPosts) setPosts(JSON.parse(savedPosts));
-
-    const savedHandovers = localStorage.getItem("zh_handovers");
-    if (savedHandovers) setHandovers(JSON.parse(savedHandovers));
-
-    const savedLogs = localStorage.getItem("zh_logs");
-    if (savedLogs) setLogs(JSON.parse(savedLogs));
-
-    const savedSuggestions = localStorage.getItem("zh_suggestions"); // 💡 건의사항 로드
-    if (savedSuggestions) setSuggestions(JSON.parse(savedSuggestions));
-
-    const savedSession = localStorage.getItem("zh_current_user");
-    if (savedSession) {
+  // 2. 세션 데이터 불러오기 및 실시간 무결성 검증
+  const savedSession = localStorage.getItem("zh_current_user");
+  if (savedSession) {
+    try {
       const parsedUser = JSON.parse(savedSession);
-      if (["특수담임", "학급담임", "학년부장", "관리자"].includes(parsedUser?.role)) {
-        setCurrentUser(parsedUser);
-      } else {
-        localStorage.removeItem("zh_current_user");
-        setCurrentUser(null);
+      
+      // 허용된 권한 목록에 없거나, 예전 구버전 데이터("private" 등)가 포함되어 있다면?
+      const validRoles = ["특수담임", "학급담임", "학년부장", "관리자"];
+      if (!parsedUser?.role || !validRoles.includes(parsedUser.role) || parsedUser.role === "private") {
+        throw new Error("정의되지 않은 구버전 세션 데이터가 감지되었습니다. 세션 업데이트가 필요합니다.");
       }
+      
+      // 정상 데이터일 때만 세션 세팅
+      setCurrentUser(parsedUser);
+    } catch (error) {
+      // 🚨 비정상 세션 찌꺼기가 발견되면 F12 없이 코드가 스스로 강제 청소
+      console.warn("비정상 세션 감지로 인한 로컬 스토리지 자동 업데이트 실행:", error);
+      localStorage.removeItem("zh_current_user");
+      setCurrentUser(null);
+      alert("시스템 업데이트로 인해 안전을 위해 자동 로그아웃되었습니다. 다시 로그인해 주세요.");
     }
-  }, []);
+  }
+}, []);
 
   // --- 2. 구글 스프레드시트 연동 API 호출 ---
   const fetchGoogleSheetData = useCallback(async () => {
@@ -583,6 +584,21 @@ export default function IntegratedTeacherPortal() {
           </div>
           <button type="submit" className="w-full bg-[#2563EB] hover:bg-[#1E40AF] text-white font-black py-3.5 rounded-xl text-xs transition-all shadow-md shadow-blue-100">
             시작 링크 연동하기 🔑
+            {/* 🚨 방안 2: 로그인 버튼 바로 밑에 긴급 초기화 버튼 배치 */}
+          <div className="text-center pt-2 border-t border-slate-100 mt-2">
+            <button
+              type="button"
+              onClick={() => {
+                if (confirm("시스템을 초기화하고 최신 상태로 복구하시겠습니까?\n(브라우저에 꼬여있는 캐시와 구버전 데이터가 완전히 청소됩니다)")) {
+                  localStorage.clear(); // 전체 로컬 스토리지 포맷
+                  window.location.reload(); // 새로고침
+                }
+              }}
+              className="text-[11px] text-slate-400 font-bold hover:text-rose-500 underline decoration-dotted underline-offset-4 transition-all"
+            >
+              화면이 안 나오거나 먹통이신가요?⚙️
+            </button>
+          </div>
           </button>
         </form>
       </div>
