@@ -568,23 +568,33 @@ useEffect(() => {
     }).join(", ");
   };
 
-  // 로그인하지 않은 상태일 때 화면 잠금 모듈 활성화
+// 로그인하지 않은 상태일 때 화면 잠금 모듈 활성화
   if (!currentUser) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
-        <form onSubmit={handleLogin} className="bg-white p-8 rounded-3xl shadow-2xl max-w-sm w-full space-y-5">
+        {/* 하얀색 전체 카드 배경 박스 */}
+        <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-sm w-full space-y-5">
+          
+          {/* 1. 상단 타이틀 구역 */}
           <div className="text-center space-y-1">
             <span className="text-4xl">🦅</span>
             <h2 className="text-xl font-black text-slate-900 tracking-tight">진해고등학교 특수학급 지원시스템</h2>
             <p className="text-xs text-slate-400 font-bold">교직원 지원포털 로그인</p>
           </div>
-          <div className="space-y-3">
-            <input type="text" placeholder="교직원 고유 ID 입력" value={inputIdx} onChange={(e) => setInputIdx(e.target.value)} className="w-full px-4 py-3 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:border-blue-500" />
-            <input type="password" placeholder="패스워드 입력" value={inputPw} onChange={(e) => setInputPw(e.target.value)} className="w-full px-4 py-3 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:border-blue-500" />
-          </div>
-          <button type="submit" className="w-full bg-[#2563EB] hover:bg-[#1E40AF] text-white font-black py-3.5 rounded-xl text-xs transition-all shadow-md shadow-blue-100">
-            교직원 로그인
-            {/* 3. 긴급 초기화 구역 (데이터 복구 로직 보완) */}
+
+          {/* 2. 로그인 폼 구역 (독립된 form) */}
+          <form onSubmit={handleLogin} className="space-y-3">
+            <div className="space-y-3">
+              <input type="text" placeholder="교직원 ID 입력" value={inputIdx} onChange={(e) => setInputIdx(e.target.value)} className="w-full px-4 py-3 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:border-blue-500" />
+              <input type="password" placeholder="패스워드 입력" value={inputPw} onChange={(e) => setInputPw(e.target.value)} className="w-full px-4 py-3 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:border-blue-500" />
+            </div>
+            {/* 폼 제출 버튼 (정상적으로 닫힘) */}
+            <button type="submit" className="w-full bg-[#2563EB] hover:bg-[#1E40AF] text-white font-black py-3.5 rounded-xl text-xs transition-all shadow-md shadow-blue-100">
+              교직원 로그인
+            </button>
+          </form>
+
+          {/* 3. 긴급 초기화 구역 (form 및 교직원 로그인 버튼 바깥으로 완벽 격리) */}
           <div className="pt-5 border-t border-slate-100">
             <button
               type="button"
@@ -606,8 +616,8 @@ useEffect(() => {
               ※ 화면이 정상적으로 보이지 않거나, 로그인 후 오류가 발생하는 경우 위 버튼을 눌러 초기화 후 재접속 해보세요.
             </p>
           </div>
-          </button>
-        </form>
+
+        </div>
       </div>
     );
   }
