@@ -584,21 +584,25 @@ useEffect(() => {
           </div>
           <button type="submit" className="w-full bg-[#2563EB] hover:bg-[#1E40AF] text-white font-black py-3.5 rounded-xl text-xs transition-all shadow-md shadow-blue-100">
             교직원 로그인
-            {/* 🚨 주황색 배경 + 흰색 글씨의 강조된 긴급 초기화 버튼 패널 */}
-          <div className="pt-6 mt-4 border-t border-slate-100">
+            {/* 3. 긴급 초기화 구역 (데이터 복구 로직 보완) */}
+          <div className="pt-5 border-t border-slate-100">
             <button
               type="button"
               onClick={() => {
-                if (confirm("시스템을 초기화하고 최신 상태로 업데이트 하시겠습니까?\n(브라우저에 꼬여있는 캐시와 구버전 데이터가 완전히 청소됩니다)")) {
-                  localStorage.clear(); // 전체 로컬 스토리지 포맷
-                  window.location.reload(); // 새로고침
+                if (confirm("시스템을 초기화하고 최신 상태로 복구하시겠습니까?\n(브라우저에 꼬여있는 캐시와 구버전 데이터가 완전히 청소됩니다)")) {
+                  localStorage.clear(); // 1. 전체 청소
+                  
+                  // 💡 2. 초기화 직후 선생님들이 바로 로그인할 수 있도록 마스터 계정 데이터 강제 초기 복구
+                  localStorage.setItem("zh_accounts", JSON.stringify(INITIAL_ACCOUNTS));
+                  
+                  window.location.reload(); // 3. 새로고침
                 }
               }}
-              className="w-full bg-[#EA580C] hover:bg-[#C2410C] text-white font-black py-3 rounded-xl text-[11px] tracking-tight transition-all shadow-md shadow-orange-100 flex items-center justify-center gap-1.5"
+              className="w-full bg-[#EA580C] hover:bg-[#C2410C] text-white font-black py-3.5 rounded-xl text-xs tracking-tight transition-all shadow-md shadow-orange-100 flex items-center justify-center gap-1.5"
             >
               ⚠️ 화면 초기화 및 시스템 업데이트 실행
             </button>
-            <p className="text-[10px] text-slate-400 font-bold text-center mt-1.5">
+            <p className="text-[10px] text-slate-400 font-bold text-center mt-2 leading-normal">
               ※ 화면이 정상적으로 보이지 않거나, 로그인 후 오류가 발생하는 경우 위 버튼을 눌러 초기화 후 재접속 해보세요.
             </p>
           </div>
