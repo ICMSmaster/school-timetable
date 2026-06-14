@@ -778,7 +778,6 @@ useEffect(() => {
                 <div className="bg-slate-50 border p-4 rounded-xl space-y-2">
                   <span className="block text-xs font-black text-slate-500">🔒 공지 대상자 지정(복수 선택 가능)</span>
 <div className="flex flex-wrap gap-2 pt-1">
-  {/* 💡 "all"로 값을 통일하여 매칭 성공 */}
   <button 
     onClick={() => handleToggleTarget("all")} 
     className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${newPostTargets.includes("all") ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-700 hover:bg-slate-100"}`}
@@ -786,7 +785,6 @@ useEffect(() => {
     전체 교사 공개
   </button>
   
-  {/* 💡 "특수담임"으로 값을 통일하여 매칭 성공 */}
   <button 
     onClick={() => handleToggleTarget("특수담임")} 
     className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${newPostTargets.includes("특수담임") ? "bg-purple-600 text-white border-purple-600" : "bg-white text-slate-700 hover:bg-slate-100"}`}
@@ -801,11 +799,26 @@ useEffect(() => {
     학년부장만
   </button>
   
-  {accounts.filter(a => a.role === "학급담임").map((teacher) => (
-    <button key={teacher.id} onClick={() => handleToggleTarget(teacher.id)} className={`px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-all ${newPostTargets.includes(teacher.id) ? "bg-[#2563EB] text-white border-[#2563EB]" : "bg-white text-slate-600 hover:bg-slate-100"}`}>
-      {teacher.name} ({teacher.targetClass})
-    </button>
-  ))}
+  {/* 💡 학급담임 목록 바인딩 구역 (다중 학급 처리 보완) */}
+  {accounts.filter(a => a.role === "학급담임").map((teacher) => {
+    // 쉼표로 구분된 학급 목록을 배열로 쪼개고 앞뒤 공백을 제거합니다 (예: "2-1, 2-4" -> ["2-1", "2-4"])
+    const classes = teacher.targetClass 
+      ? teacher.targetClass.split(",").map(c => c.trim()).filter(Boolean)
+      : [];
+    
+    // 화면에 보여줄 학급 텍스트 생성
+    const classDisplay = classes.length > 0 ? classes.join(", ") : "지정 없음";
+
+    return (
+      <button 
+        key={teacher.id} 
+        onClick={() => handleToggleTarget(teacher.id)} 
+        className={`px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-all ${newPostTargets.includes(teacher.id) ? "bg-[#2563EB] text-white border-[#2563EB]" : "bg-white text-slate-600 hover:bg-slate-100"}`}
+      >
+        {teacher.name} ({classDisplay})
+      </button>
+    );
+  })}
 </div>
 <div className="text-[11px] text-slate-400 font-bold pt-1">현재 선택된 공지 대상 : {getReadableTargets(newPostTargets)}</div>
 <div className="text-right pt-2">
