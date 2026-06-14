@@ -583,21 +583,24 @@ useEffect(() => {
             <input type="password" placeholder="패스워드 입력" value={inputPw} onChange={(e) => setInputPw(e.target.value)} className="w-full px-4 py-3 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:border-blue-500" />
           </div>
           <button type="submit" className="w-full bg-[#2563EB] hover:bg-[#1E40AF] text-white font-black py-3.5 rounded-xl text-xs transition-all shadow-md shadow-blue-100">
-            시작 링크 연동하기 🔑
-            {/* 🚨 방안 2: 로그인 버튼 바로 밑에 긴급 초기화 버튼 배치 */}
-          <div className="text-center pt-2 border-t border-slate-100 mt-2">
+            교직원 로그인
+            {/* 🚨 주황색 배경 + 흰색 글씨의 강조된 긴급 초기화 버튼 패널 */}
+          <div className="pt-6 mt-4 border-t border-slate-100">
             <button
               type="button"
               onClick={() => {
-                if (confirm("시스템을 초기화하고 최신 상태로 복구하시겠습니까?\n(브라우저에 꼬여있는 캐시와 구버전 데이터가 완전히 청소됩니다)")) {
+                if (confirm("시스템을 초기화하고 최신 상태로 업데이트 하시겠습니까?\n(브라우저에 꼬여있는 캐시와 구버전 데이터가 완전히 청소됩니다)")) {
                   localStorage.clear(); // 전체 로컬 스토리지 포맷
                   window.location.reload(); // 새로고침
                 }
               }}
-              className="text-[11px] text-slate-400 font-bold hover:text-rose-500 underline decoration-dotted underline-offset-4 transition-all"
+              className="w-full bg-[#EA580C] hover:bg-[#C2410C] text-white font-black py-3 rounded-xl text-[11px] tracking-tight transition-all shadow-md shadow-orange-100 flex items-center justify-center gap-1.5"
             >
-              화면이 안 나오거나 먹통이신가요?⚙️
+              ⚠️ 화면 초기화 및 시스템 업데이트 실행
             </button>
+            <p className="text-[10px] text-slate-400 font-bold text-center mt-1.5">
+              ※ 화면이 정상적으로 보이지 않거나, 로그인 후 오류가 발생하는 경우 위 버튼을 눌러 초기화 후 재접속 해보세요.
+            </p>
           </div>
           </button>
         </form>
