@@ -23,7 +23,7 @@ interface UserAccount {
   role: "특수담임" | "학급담임" | "학년부장" | "관리자";
   targetClass: string; // 담당학급 (예: "2-1", "2-9", "전체")
   password: string;  // 비밀번호
-  subject?: string;  // 담당교과
+  subject?: string;   // 담당교과
 }
 
 interface BoardPost {
@@ -63,17 +63,6 @@ interface SystemLog {
   action: string;
 }
 
-interface SuggestionItem {
-  id: string;
-  authorId: string;
-  authorName: string;
-  authorRole: string;
-  content: string;
-  date: string;
-  status: "접수 대기" | "검토 중" | "조치 완료";
-  adminFeedback?: string;
-}
-
 // --- 마스터 데이터 (초기 복구용) ---
 const INITIAL_STUDENTS: Student[] = [
   { id: "20110", name: "김한얼", homeroom: "김대홍", gradeClass: "2-1" },
@@ -107,7 +96,7 @@ export default function IntegratedTeacherPortal() {
   // --- 핵심 상태 관리 ---
   const [accounts, setAccounts] = useState<UserAccount[]>([]);
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
-  const [currentMenu, setCurrentMenu] = useState<"dashboard" | "studentSearch" | "board" | "handover" | "settings" | "accountMgmt" | "logMgmt" | "suggestionMgmt">("dashboard");
+  const [currentMenu, setCurrentMenu] = useState<"dashboard" | "studentSearch" | "board" | "handover" | "settings" | "accountMgmt" | "logMgmt">("dashboard");
   
   const [sheetSchedules, setSheetSchedules] = useState<Record<string, { currentSubject: string; currentRoom: string; timeline: TimelineItem[] }>>({});
   const [isSyncing, setIsSyncing] = useState(false);
@@ -115,7 +104,6 @@ export default function IntegratedTeacherPortal() {
   const [posts, setPosts] = useState<BoardPost[]>([]);
   const [handovers, setHandovers] = useState<HandoverItem[]>([]);
   const [logs, setLogs] = useState<SystemLog[]>([]);
-  const [suggestions, setSuggestions] = useState<SuggestionItem[]>([]); 
 
   // 로그인 관련
   const [inputIdx, setInputIdx] = useState("");
@@ -125,12 +113,12 @@ export default function IntegratedTeacherPortal() {
   // 게시판 작성 임시 상태
   const [newPostTitle, setNewPostTitle] = useState("");
   const [newPostContent, setNewPostContent] = useState("");
-  const [newPostTargets, setNewPostTargets] = useState<string[]>(["all"]); 
+  const [newPostTargets, setNewPostTargets] = useState<string[]>(["all"]); // 기본값 전체공개
 
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
   const [handoverInputs, setHandoverInputs] = useState<Record<string, string>>({});
 
-  // 내 설정 수정 및 건의사항 기입 상태
+  // 내 설정 수정
   const [changePw, setChangePw] = useState("");
   const [changeSubj, setChangeSubj] = useState("");
   const [reqText, setReqText] = useState("");
@@ -150,9 +138,6 @@ export default function IntegratedTeacherPortal() {
   const [editAccClass, setEditAccClass] = useState("");
   const [editAccPw, setEditAccPw] = useState("");
   const [editAccSubj, setEditAccSubj] = useState("");
-
-  // 관리자 전용 - 건의사항 관리 처리 의견 상태
-  const [adminFeedbackInputs, setAdminFeedbackInputs] = useState<Record<string, string>>({});
 
   // --- 1. LocalStorage 기반 영구 보존 로직 ---
   useEffect(() => {
@@ -174,9 +159,6 @@ export default function IntegratedTeacherPortal() {
 
     const savedSession = localStorage.getItem("zh_current_user");
     if (savedSession) setCurrentUser(JSON.parse(savedSession));
-
-    const savedSuggestions = localStorage.getItem("zh_suggestions");
-    if (savedSuggestions) setSuggestions(JSON.parse(savedSuggestions));
   }, []);
 
   // --- 2. 구글 스프레드시트 연동 API 호출 ---
@@ -389,7 +371,7 @@ export default function IntegratedTeacherPortal() {
     writeLog(currentUser?.name || "알수없음", "인계록 기록 파기");
   };
 
-  // --- 7. 포털 개인 설정 정보 수정 및 건의사항 상신 ---
+  // --- 7. 포털 개인 설정 정보 수정 ---
   const handleUpdateProfile = () => {
     if (!currentUser) return;
     let uPw = currentUser.password;
@@ -416,26 +398,9 @@ export default function IntegratedTeacherPortal() {
 
   const handleSendRequest = () => {
     if (!reqText.trim() || !currentUser) return;
-
-    const newSuggestion: SuggestionItem = {
-      id: String(Date.now()),
-      authorId: currentUser.id,
-      authorName: currentUser.name,
-      authorRole: currentUser.role,
-      content: reqText,
-      date: new Date().toLocaleString("ko-KR"),
-      status: "접수 대기",
-    };
-
-    setSuggestions((prev) => {
-      const updated = [newSuggestion, ...prev];
-      localStorage.setItem("zh_suggestions", JSON.stringify(updated));
-      return updated;
-    });
-
-    writeLog(currentUser.name, `[개선 건의사항 센터 상신]: ${reqText}`);
+    writeLog(currentUser.name, `[개선 요청 접수]: ${reqText}`);
     setReqText("");
-    alert("통제 센터 및 민석준 선생님에게 긴급 건의사항이 공식 보고되었습니다.");
+    alert("관리자 및 민석준 선생님에게 긴급 건의가 전달되었습니다.");
   };
 
   // --- 8. 관리자 모드: 계정 마스터 실시간 조회/추가 및 직접 수정 기능 ---
@@ -465,7 +430,7 @@ export default function IntegratedTeacherPortal() {
     
     setNewAccId("");
     setNewAccName("");
-    alert("신규 계정이 마스터 DB에 안전하게 마운트되었습니다.");
+    alert("신규 계정임 마스터 DB에 안전하게 마운트되었습니다.");
   };
 
   const startEditAccount = (acc: UserAccount) => {
@@ -513,42 +478,7 @@ export default function IntegratedTeacherPortal() {
     writeLog("최고관리자", `교직원 계정 파기: ${name}`);
   };
 
-  // --- ⚙️ 건의사항 상태 및 피드백 제어 로직 ---
-  const handleUpdateSuggestionStatus = (id: string, nextStatus: "접수 대기" | "검토 중" | "조치 완료") => {
-    setSuggestions((prev) => {
-      const updated = prev.map((item) => (item.id === id ? { ...item, status: nextStatus } : item));
-      localStorage.setItem("zh_suggestions", JSON.stringify(updated));
-      return updated;
-    });
-    writeLog("총괄 통제 센터", `건의사항 코드 [${id}] 상태 변경 ➔ ${nextStatus}`);
-  };
-
-  const handleSaveSuggestionFeedback = (id: string) => {
-    const feedbackText = adminFeedbackInputs[id];
-    if (!feedbackText || !feedbackText.trim()) return;
-
-    setSuggestions((prev) => {
-      const updated = prev.map((item) => (item.id === id ? { ...item, adminFeedback: feedbackText } : item));
-      localStorage.setItem("zh_suggestions", JSON.stringify(updated));
-      return updated;
-    });
-
-    setAdminFeedbackInputs((prev) => ({ ...prev, [id]: "" }));
-    writeLog("총괄 통제 센터", `건의사항 코드 [${id}] 피드백 의견 검토 등록 완료`);
-    alert("처리 의견 답변이 정상적으로 승인/업데이트 되었습니다.");
-  };
-
-  const handleDeleteSuggestion = (id: string) => {
-    if (!confirm("이 보고 내용을 건의함 기록 아카이브에서 완전히 파기합니까?")) return;
-    setSuggestions((prev) => {
-      const updated = prev.filter((item) => item.id !== id);
-      localStorage.setItem("zh_suggestions", JSON.stringify(updated));
-      return updated;
-    });
-    writeLog("총괄 통제 센터", `건의사항 코드 [${id}] 아카이브 파기`);
-  };
-
-  // --- 9. 권한별 조회 필터 핵심 로직 (에러 완벽 방어형 보강) ---
+  // --- 9. 권한별 조회 필터 핵심 로직 ---
   const getVisibleStudents = () => {
     if (!currentUser) return [];
     if (currentUser.role === "특수담임" || currentUser.role === "관리자") {
@@ -558,37 +488,29 @@ export default function IntegratedTeacherPortal() {
   };
 
   const isPostVisible = (post: BoardPost) => {
-    if (!currentUser || !post) return false; 
-    if (currentUser.role === "관리자" || post.authorId === currentUser.id) return true;
-    if (post.allowedTargets?.includes("all")) return true;
-    if (post.allowedTargets?.includes(currentUser.role)) return true;
-    if (post.allowedTargets?.includes(currentUser.id)) return true;
+    if (currentUser?.role === "관리자" || post.authorId === currentUser?.id) return true;
+    if (post.allowedTargets.includes("all")) return true;
+    if (post.allowedTargets.includes(currentUser?.role || "")) return true;
+    if (post.allowedTargets.includes(currentUser?.id || "")) return true;
     return false;
   };
 
-  // --- 🔓 미로그인 가드 인터셉터 ---
+  // 비로그인 상태일 때 로그인 폼 출력 제어
   if (!currentUser) {
     return (
       <div className="min-h-screen bg-[#F4F7FA] flex items-center justify-center p-4">
-        <div className="bg-white p-8 rounded-3xl shadow-xl border border-slate-200 max-w-sm w-full space-y-6 text-center">
-          <div>
-            <span className="text-5xl">🦅</span>
-            <h1 className="text-xl font-black text-slate-900 mt-3 tracking-tight">진해고 통합 관제 포털</h1>
-            <p className="text-xs text-slate-400 font-bold mt-1">교직원 종합 인트라넷 인증 시스템</p>
+        <form onSubmit={handleLogin} className="bg-white p-8 rounded-3xl border border-slate-200 shadow-xl max-w-sm w-full space-y-4">
+          <div className="text-center">
+            <span className="text-4xl">🦅</span>
+            <h2 className="text-xl font-black text-slate-900 tracking-tight mt-2">진해고등학교 포털 교사 전용관</h2>
+            <p className="text-xs text-slate-400 font-medium mt-1">통합 관리 계정 정보를 바르게 입력해 주십시오.</p>
           </div>
-          <form onSubmit={handleLogin} className="space-y-3 text-left">
-            <div>
-              <label className="block text-[11px] font-black text-slate-400 uppercase mb-1">교직원 사용자 ID</label>
-              <input type="text" placeholder="아이디 기입" value={inputIdx} onChange={(e) => setInputIdx(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-slate-200 font-semibold text-xs focus:outline-none focus:border-blue-500 bg-slate-50" />
-            </div>
-            <div>
-              <label className="block text-[11px] font-black text-slate-400 uppercase mb-1">보안인증 비밀번호</label>
-              <input type="password" placeholder="비밀번호 기입" value={inputPw} onChange={(e) => setInputPw(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-slate-200 font-semibold text-xs focus:outline-none focus:border-blue-500 bg-slate-50" />
-            </div>
-            <button type="submit" className="w-full bg-[#2563EB] text-white py-3.5 rounded-xl font-black text-xs shadow-md shadow-blue-100 hover:bg-[#1E40AF] transition-all pt-4">🔑 내부 승인 망 접속</button>
-          </form>
-          <div className="text-[10px] text-slate-400 font-medium">인증 오류 및 분실 시 총괄 관리자에게 문의 바랍니다.</div>
-        </div>
+          <div className="space-y-3 text-xs font-bold">
+            <input type="text" placeholder="교직원 로그인 고유 식별 ID" value={inputIdx} onChange={(e) => setInputIdx(e.target.value)} className="w-full px-4 py-3 border rounded-xl focus:outline-none focus:border-blue-500" />
+            <input type="password" placeholder="접속 비밀번호 패스워드" value={inputPw} onChange={(e) => setInputPw(e.target.value)} className="w-full px-4 py-3 border rounded-xl focus:outline-none focus:border-blue-500" />
+            <button type="submit" className="w-full bg-[#2563EB] text-white font-black py-3.5 rounded-xl transition-all shadow-md shadow-blue-100 text-sm">시스템 보안 마운트 로그인</button>
+          </div>
+        </form>
       </div>
     );
   }
@@ -605,39 +527,35 @@ export default function IntegratedTeacherPortal() {
             <div className="inline-block mt-2 bg-blue-50 text-[#2563EB] text-[11px] font-extrabold px-3 py-1 rounded-full border border-blue-100">
               {currentUser.name} [{currentUser.role}]
             </div>
-            {currentUser.role !== "관리자" && (
+            {currentUser.role !== "관리자" && currentUser.role !== "특수담임" && (
               <div className="text-[11px] text-slate-500 font-bold mt-1.5">학반 관제: {currentUser.targetClass}</div>
             )}
           </div>
 
           <nav className="p-4 space-y-1">
-            <button onClick={() => setCurrentMenu("dashboard")} className={`w-full flex items-center gap-3.5 px-4 py-3.5 rounded-2xl text-sm font-black transition-all ${currentMenu === "dashboard" ? "bg-[#2563EB] text-white shadow-md shadow-blue-100" : "text-slate-600 hover:bg-slate-100"}`}>
+            <button onClick={() => { setCurrentMenu("dashboard"); setSelectedStudent(null); }} className={`w-full flex items-center gap-3.5 px-4 py-3.5 rounded-2xl text-sm font-black transition-all ${currentMenu === "dashboard" ? "bg-[#2563EB] text-white shadow-md shadow-blue-100" : "text-slate-600 hover:bg-slate-100"}`}>
               <span className="text-xl">🏠</span> 대시보드
             </button>
-            <button onClick={() => setCurrentMenu("studentSearch")} className={`w-full flex items-center gap-3.5 px-4 py-3.5 rounded-2xl text-sm font-black transition-all ${currentMenu === "studentSearch" ? "bg-[#2563EB] text-white shadow-md shadow-blue-100" : "text-slate-600 hover:bg-slate-100"}`}>
+            <button onClick={() => { setCurrentMenu("studentSearch"); setSelectedStudent(null); }} className={`w-full flex items-center gap-3.5 px-4 py-3.5 rounded-2xl text-sm font-black transition-all ${currentMenu === "studentSearch" ? "bg-[#2563EB] text-white shadow-md shadow-blue-100" : "text-slate-600 hover:bg-slate-100"}`}>
               <span className="text-xl">👨‍🎓</span> 학생조회
             </button>
-            <button onClick={() => setCurrentMenu("board")} className={`w-full flex items-center gap-3.5 px-4 py-3.5 rounded-2xl text-sm font-black transition-all ${currentMenu === "board" ? "bg-[#2563EB] text-white shadow-md shadow-blue-100" : "text-slate-600 hover:bg-slate-100"}`}>
+            <button onClick={() => { setCurrentMenu("board"); setSelectedStudent(null); }} className={`w-full flex items-center gap-3.5 px-4 py-3.5 rounded-2xl text-sm font-black transition-all ${currentMenu === "board" ? "bg-[#2563EB] text-white shadow-md shadow-blue-100" : "text-slate-600 hover:bg-slate-100"}`}>
               <span className="text-xl">📢</span> 게시판 공지
             </button>
-            <button onClick={() => setCurrentMenu("handover")} className={`w-full flex items-center gap-3.5 px-4 py-3.5 rounded-2xl text-sm font-black transition-all ${currentMenu === "handover" ? "bg-[#2563EB] text-white shadow-md shadow-blue-100" : "text-slate-600 hover:bg-slate-100"}`}>
+            <button onClick={() => { setCurrentMenu("handover"); setSelectedStudent(null); }} className={`w-full flex items-center gap-3.5 px-4 py-3.5 rounded-2xl text-sm font-black transition-all ${currentMenu === "handover" ? "bg-[#2563EB] text-white shadow-md shadow-blue-100" : "text-slate-600 hover:bg-slate-100"}`}>
               <span className="text-xl">📝</span> 인계록 작성
             </button>
-            <button onClick={() => setCurrentMenu("settings")} className={`w-full flex items-center gap-3.5 px-4 py-3.5 rounded-2xl text-sm font-black transition-all ${currentMenu === "settings" ? "bg-[#2563EB] text-white shadow-md shadow-blue-100" : "text-slate-600 hover:bg-slate-100"}`}>
+            <button onClick={() => { setCurrentMenu("settings"); setSelectedStudent(null); }} className={`w-full flex items-center gap-3.5 px-4 py-3.5 rounded-2xl text-sm font-black transition-all ${currentMenu === "settings" ? "bg-[#2563EB] text-white shadow-md shadow-blue-100" : "text-slate-600 hover:bg-slate-100"}`}>
               <span className="text-xl">⚙️</span> 포털 설정
             </button>
 
-            {/* 👑 총괄 통제 센터 메뉴 섹션 (타입 오류 완벽 수정 보강 파트) */}
             {(currentUser.role === "관리자" || currentUser.id === "민석준") && (
               <div className="pt-4 mt-4 border-t border-slate-100 space-y-1">
                 <div className="px-4 text-[10px] font-black text-slate-400 tracking-wider mb-1 uppercase">총괄 통제 센터</div>
-                <button onClick={() => setCurrentMenu("suggestionMgmt")} className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-xs font-black transition-all ${currentMenu === "suggestionMgmt" ? "bg-purple-600 text-white" : "text-purple-600 hover:bg-purple-50"}`}>
-                  <span>⚙️</span> 건의사항 관리 포털
-                </button>
-                <button onClick={() => setCurrentMenu("accountMgmt")} className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-xs font-black transition-all ${currentMenu === "accountMgmt" ? "bg-purple-600 text-white" : "text-purple-600 hover:bg-purple-50"}`}>
+                <button onClick={() => { setCurrentMenu("accountMgmt"); setSelectedStudent(null); }} className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-xs font-black transition-all ${currentMenu === "accountMgmt" ? "bg-purple-600 text-white" : "text-purple-600 hover:bg-purple-50"}`}>
                   <span>🔒</span> 계정 관리 수정 포털
                 </button>
-                <button onClick={() => setCurrentMenu("logMgmt")} className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-xs font-black transition-all ${currentMenu === "logMgmt" ? "bg-purple-600 text-white" : "text-purple-600 hover:bg-purple-50"}`}>
+                <button onClick={() => { setCurrentMenu("logMgmt"); setSelectedStudent(null); }} className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-xs font-black transition-all ${currentMenu === "logMgmt" ? "bg-purple-600 text-white" : "text-purple-600 hover:bg-purple-50"}`}>
                   <span>📋</span> 프로세스 감사 로그
                 </button>
               </div>
@@ -662,7 +580,6 @@ export default function IntegratedTeacherPortal() {
               {currentMenu === "board" && "📢 교직원 협의 알림장 게시판"}
               {currentMenu === "handover" && "📝 특수학급 인계록 마스터 보드"}
               {currentMenu === "settings" && "⚙️ 개인 권한 세팅 정보 변경"}
-              {currentMenu === "suggestionMgmt" && "⚙️ [총괄 통제 센터] 건의사항 종합 관제 데이터셋"}
               {currentMenu === "accountMgmt" && "👑 [관리자 전용] 교직원 계정 통합 수정 관리"}
               {currentMenu === "logMgmt" && "📋 [관리자 전용] 실시간 통합 감사 로그"}
             </h1>
@@ -757,13 +674,14 @@ export default function IntegratedTeacherPortal() {
                     <button onClick={() => handleToggleTarget("all")} className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${newPostTargets.includes("all") ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-700 hover:bg-slate-100"}`}>전체 교사 공개</button>
                     <button onClick={() => handleToggleTarget("특수담임")} className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${newPostTargets.includes("특수담임") ? "bg-purple-600 text-white border-purple-600" : "bg-white text-slate-700 hover:bg-slate-100"}`}>특수담임만</button>
                     <button onClick={() => handleToggleTarget("학년부장")} className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${newPostTargets.includes("학년부장") ? "bg-purple-600 text-white border-purple-600" : "bg-white text-slate-700 hover:bg-slate-100"}`}>학년부장만</button>
-                    {accounts?.filter(a => a?.role === "학급담임").map((teacher) => (
+                    
+                    {accounts.filter(a => a.role === "학급담임").map((teacher) => (
                       <button key={teacher.id} onClick={() => handleToggleTarget(teacher.id)} className={`px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-all ${newPostTargets.includes(teacher.id) ? "bg-[#2563EB] text-white border-[#2563EB]" : "bg-white text-slate-600 hover:bg-slate-100"}`}>
                         {teacher.name} ({teacher.targetClass})
                       </button>
                     ))}
                   </div>
-                  <div className="text-[11px] text-slate-400 font-bold pt-1">현재 선택된 열람 타겟 코드: <span className="text-[#2563EB] font-black">{newPostTargets.join(", ")}</span></div>
+                  <div className="text-[11px] text-slate-400 font-bold pt-1">현재 선택된 열람 타겟 코드: {newPostTargets.join(", ")}</div>
                   <div className="text-right pt-2">
                     <button onClick={handleCreatePost} className="bg-[#2563EB] hover:bg-[#1E40AF] text-white text-xs font-black px-6 py-2.5 rounded-xl shadow-xs">공지사항 즉시 배포</button>
                   </div>
@@ -773,10 +691,10 @@ export default function IntegratedTeacherPortal() {
 
             {/* 피드 게시글 리스트 */}
             <div className="space-y-4">
-              {(!posts || posts.filter(p => isPostVisible(p)).length === 0) ? (
+              {posts.filter(isPostVisible).length === 0 ? (
                 <div className="text-center py-16 bg-white border rounded-2xl text-slate-400 font-bold text-xs">전달받은 공지 및 접근 권한이 허용된 게시글이 없습니다.</div>
               ) : (
-                posts.filter(p => isPostVisible(p)).map((post) => (
+                posts.filter(isPostVisible).map((post) => (
                   <div key={post.id} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-2xs space-y-4">
                     <div className="flex justify-between items-start border-b pb-3 border-slate-100">
                       <div>
@@ -784,22 +702,25 @@ export default function IntegratedTeacherPortal() {
                         <h4 className="text-base font-black text-slate-900 inline-block">{post.title}</h4>
                         <div className="text-[11px] text-slate-400 font-bold mt-1">발행: {post.authorName} 교사 | 일자: {post.date}</div>
                       </div>
+                      
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] bg-slate-100 font-bold text-slate-500 px-2 py-1 rounded">
-                          타겟: {post.allowedTargets?.includes("all") ? "전체공개" : "다중 제한공개"}
+                          타겟: {post.allowedTargets.includes("all") ? "전체공개" : "다중 제한공개"}
                         </span>
                         {(currentUser?.role === "관리자" || post.authorId === currentUser?.id) && (
-                          <button onClick={() => handleDeletePost(post.id, post.authorId)} className="text-rose-600 bg-rose-50 text-[11px] font-bold px-2 py-1 rounded-md border border-rose-100 hover:bg-rose-100">삭제</button>
+                          <button onClick={() => handleDeletePost(post.id, post.authorId)} className="text-rose-600 bg-rose-50 text-[11px] font-bold px-2 py-1 rounded-md border border-rose-100 hover:bg-rose-100">
+                            삭제
+                          </button>
                         )}
                       </div>
                     </div>
                     <p className="text-xs font-medium text-slate-700 bg-slate-50/70 p-4 border rounded-xl whitespace-pre-wrap leading-relaxed">{post.content}</p>
-                    
+
                     {/* 댓글 공간 */}
                     <div className="space-y-2 pt-2">
-                      <div className="text-xs font-bold text-slate-400">💬 피드백 확인 피드 ({post.comments?.length || 0})</div>
+                      <div className="text-xs font-bold text-slate-400">💬 피드백 확인 피드 ({post.comments.length})</div>
                       <div className="space-y-1.5 max-h-40 overflow-y-auto">
-                        {post.comments?.map((c) => (
+                        {post.comments.map((c) => (
                           <div key={c.id} className="bg-slate-50 p-2.5 rounded-xl border border-slate-100/60 flex justify-between text-xs font-semibold">
                             <div>
                               <span className="text-[#2563EB] font-black mr-2">[{c.authorName}]</span>
@@ -840,48 +761,38 @@ export default function IntegratedTeacherPortal() {
                 ))}
               </div>
             </div>
+
             <div className="lg:col-span-2 space-y-4">
               {selectedStudent ? (
                 <>
                   <div className="bg-white border p-6 rounded-2xl shadow-xs space-y-4">
-                    <div className="border-b pb-3 flex justify-between items-center">
-                      <div>
-                        <h2 className="text-xl font-black text-slate-900">{selectedStudent.name} <span className="text-xs text-slate-400 font-bold">학번 {selectedStudent.id} | {selectedStudent.gradeClass}</span></h2>
-                        <p className="text-[11px] text-slate-400 font-semibold mt-0.5">원반 담임교사: {selectedStudent.homeroom} 선생님</p>
-                      </div>
-                      <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-xs font-black">특수학급 연동 대상</span>
+                    <div className="border-b pb-2">
+                      <h3 className="text-base font-black text-slate-900">{selectedStudent.name} 학생 인계 특이사항 작성</h3>
                     </div>
-
-                    <div className="space-y-2">
-                      <label className="block text-xs font-black text-slate-600">📝 신규 관찰 기록 및 인계사항 작성</label>
-                      <textarea rows={3} placeholder="교실 이탈, 정서 상태, 수업 피드백 등 원반과 도움실 간 유의사항 상세 기입..." value={handoverInputs[selectedStudent.id] || ""} onChange={(e) => setHandoverInputs({ ...handoverInputs, [selectedStudent.id]: e.target.value })} className="w-full p-4 border border-slate-200 bg-slate-50 rounded-xl text-xs font-medium focus:outline-none focus:border-purple-500" />
-                      <div className="text-right">
-                        <button onClick={() => handleSaveHandover(selectedStudent.id, selectedStudent.name)} className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-black px-5 py-2 rounded-xl shadow-xs">📄 타임스탬프 인계 저장</button>
-                      </div>
+                    <textarea placeholder="일과 종료 후 전달사항, 특이 행동 기록..." rows={4} value={handoverInputs[selectedStudent.id] || ""} onChange={(e) => setHandoverInputs({ ...handoverInputs, [selectedStudent.id]: e.target.value })} className="w-full p-4 border border-slate-300 rounded-xl text-xs font-semibold focus:outline-none focus:border-purple-500" />
+                    <div className="text-right">
+                      <button onClick={() => handleSaveHandover(selectedStudent.id, selectedStudent.name)} className="bg-purple-600 text-white text-xs font-black px-6 py-3 rounded-xl shadow-xs">기록 동기화 및 저장</button>
                     </div>
                   </div>
 
-                  <div className="space-y-3">
-                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-wider pl-1">누적 인계 타임라인 기록 목록</h3>
-                    <div className="space-y-3 max-h-[350px] overflow-y-auto">
+                  <div className="bg-white border p-6 rounded-2xl shadow-xs space-y-3">
+                    <h4 className="text-xs font-black text-slate-400">📌 누적 저장된 기존 인계 데이터 피드</h4>
+                    <div className="space-y-3 max-h-60 overflow-y-auto">
                       {handovers.filter(h => h.studentId === selectedStudent.id).length === 0 ? (
-                        <div className="text-center py-12 bg-white border border-dashed rounded-2xl text-slate-400 text-xs font-bold">기록된 특수교육 인계 타임라인이 존재하지 않습니다.</div>
+                        <div className="text-center py-8 text-xs text-slate-400 font-bold">인계 기록 파일이 비어 있습니다.</div>
                       ) : (
-                        handovers.filter(h => h.studentId === selectedStudent.id).map((h) => (
-                          <div key={h.id} className="bg-white border border-slate-200 p-5 rounded-xl shadow-2xs space-y-2 relative">
-                            <div className="flex justify-between items-center text-xs border-b pb-2 border-slate-50">
+                        handovers.filter(h => h.studentId === selectedStudent.id).map((item) => (
+                          <div key={item.id} className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-2 text-xs">
+                            <div className="flex justify-between font-bold text-[11px] text-slate-400">
+                              <span>교사: {item.authorName} ({item.authorRole})</span>
                               <div className="flex items-center gap-2">
-                                <span className="bg-purple-50 border border-purple-100 text-purple-600 font-black text-[10px] px-2 py-0.5 rounded">{h.authorRole}</span>
-                                <span className="font-black text-slate-800">{h.authorName} 교사</span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-[10px] text-slate-400 font-bold">{h.date}</span>
-                                {(currentUser?.role === "관리자" || h.authorId === currentUser?.id) && (
-                                  <button onClick={() => handleDeleteHandover(h.id, h.authorId)} className="text-rose-500 font-black text-[11px] hover:underline bg-rose-50 px-1.5 py-0.5 border border-rose-100 rounded">삭제</button>
+                                <span>{item.date}</span>
+                                {(currentUser?.role === "특수담임" || currentUser?.role === "관리자" || item.authorId === currentUser?.id) && (
+                                  <button onClick={() => handleDeleteHandover(item.id, item.authorId)} className="text-rose-600 bg-rose-100/50 px-1.5 py-0.5 rounded font-black hover:bg-rose-100">삭제</button>
                                 )}
                               </div>
                             </div>
-                            <p className="text-xs text-slate-700 font-semibold leading-relaxed whitespace-pre-wrap pt-1">{h.content}</p>
+                            <p className="font-semibold text-slate-800 whitespace-pre-wrap leading-relaxed">{item.content}</p>
                           </div>
                         ))
                       )}
@@ -889,7 +800,7 @@ export default function IntegratedTeacherPortal() {
                   </div>
                 </>
               ) : (
-                <div className="text-center py-24 bg-white border rounded-2xl text-slate-400 font-bold text-xs shadow-2xs">좌측 아카이브 명단에서 조회 및 인계를 진행할 학생을 선택해 주세요.</div>
+                <div className="bg-white border rounded-2xl p-16 text-center text-slate-400 font-bold text-xs">← 인계 내역을 로드 및 기록할 학생을 왼쪽 스크롤 바에서 터치해 주십시오.</div>
               )}
             </div>
           </div>
@@ -897,261 +808,188 @@ export default function IntegratedTeacherPortal() {
 
         {/* 메뉴 5: 포털 설정 */}
         {currentMenu === "settings" && (
-          <div className="bg-white border border-slate-200 rounded-2xl p-6 md:p-8 max-w-2xl shadow-xs space-y-6">
-            <div>
-              <h2 className="text-base font-black text-slate-900 border-b pb-3 mb-4 border-slate-100">🔒 본인 계정 비밀번호 및 연동 정보 변경</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-white border p-6 rounded-2xl shadow-xs space-y-4">
+              <h3 className="font-black text-sm text-slate-900 border-b pb-2">🔒 보안 패스워드 및 정보 변경</h3>
+              <div className="space-y-3 text-xs font-bold">
                 <div>
-                  <label className="block text-[11px] font-black text-slate-400 uppercase mb-1">새 비밀번호 설정</label>
-                  <input type="password" placeholder="변경할 비밀번호 입력" value={changePw} onChange={(e) => setChangePw(e.target.value)} className="w-full px-4 py-2.5 bg-slate-50 border rounded-xl text-xs font-bold focus:outline-none focus:border-blue-500" />
+                  <label className="block text-slate-500 mb-1">사용자 교사 고유 식별 코드</label>
+                  <input type="text" disabled value={currentUser.id} className="w-full px-3 py-2 bg-slate-100 text-slate-400 border rounded-xl" />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-black text-slate-400 uppercase mb-1">담당 세부 교과 변경</label>
-                  <input type="text" placeholder="예: 특수교육, 국어, 수학" value={changeSubj} onChange={(e) => setChangeSubj(e.target.value)} className="w-full px-4 py-2.5 bg-slate-50 border rounded-xl text-xs font-bold focus:outline-none focus:border-blue-500" />
+                  <label className="block text-slate-500 mb-1">새 비밀번호 입력</label>
+                  <input type="password" placeholder="변경할 4자리 암호 입력" value={changePw} onChange={(e) => setChangePw(e.target.value)} className="w-full px-3 py-2 border rounded-xl focus:outline-none" />
                 </div>
-              </div>
-              <div className="text-right mt-3">
-                <button onClick={handleUpdateProfile} className="bg-slate-800 text-white font-black text-xs px-5 py-2.5 rounded-xl hover:bg-slate-900 shadow-sm">⚙️ 내 정보 실시간 보존 업데이트</button>
+                <div>
+                  <label className="block text-slate-500 mb-1">담당 과목 정보 기입</label>
+                  <input type="text" placeholder={currentUser.subject || "담당교과 미설정"} value={changeSubj} onChange={(e) => setChangeSubj(e.target.value)} className="w-full px-3 py-2 border rounded-xl focus:outline-none" />
+                </div>
+                <button onClick={handleUpdateProfile} className="w-full bg-slate-800 text-white font-black py-3 rounded-xl text-xs">마스터 레코드 수정</button>
               </div>
             </div>
-
-            <div className="bg-amber-50/70 border border-amber-200 p-6 rounded-2xl space-y-3">
-              <div>
-                <h3 className="font-black text-sm text-amber-900">🚨 총괄 통제 센터 및 민석준 교사 직통 건의사항 상신함</h3>
-                <p className="text-[11px] text-amber-700/80 font-bold mt-0.5">망 운영 및 권한, 시스템 버그, 개선이 필요한 요구사항을 기입하면 실시간 종합 통제 센터 데이터셋으로 원격 상신됩니다.</p>
-              </div>
-              <textarea placeholder="요구사항 및 버그 현상, 필요한 지원 대책을 기입해 주십시오..." rows={4} value={reqText} onChange={(e) => setReqText(e.target.value)} className="w-full p-4 border border-amber-300 bg-white rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:border-amber-500" />
-              <div className="text-right">
-                <button onClick={handleSendRequest} className="bg-amber-600 hover:bg-amber-700 text-white font-black text-xs px-5 py-2.5 rounded-xl shadow-xs">📤 종합 센터 원격 안건 상신</button>
-              </div>
+            <div className="bg-white border p-6 rounded-2xl shadow-xs space-y-4">
+              <h3 className="font-black text-sm text-slate-900 border-b pb-2">🚀 업그레이드 기능 개선안 요청 상신</h3>
+              <textarea placeholder="요청 사항 기재..." rows={4} value={reqText} onChange={(e) => setReqText(e.target.value)} className="w-full p-4 border border-slate-300 rounded-xl text-xs font-semibold focus:outline-none" />
+              <button onClick={handleSendRequest} className="w-full bg-[#2563EB] text-white font-black py-3 rounded-xl text-xs">개선 요구서 송신</button>
             </div>
           </div>
         )}
 
-        {/* 메뉴: 총괄 통제 센터 - 건의사항 관리 포털 */}
-        {currentMenu === "suggestionMgmt" && (currentUser.role === "관리자" || currentUser.id === "민석준") && (
-          <div className="space-y-6">
-            <div className="bg-white border p-6 rounded-2xl shadow-xs">
-              <h2 className="text-sm font-black text-slate-900 uppercase tracking-tight mb-2">📥 전 교직원 제출 상신 건의사항 리스트 아카이브</h2>
-              <p className="text-xs text-slate-400 font-bold">교직원들의 개선 건의 현황을 실시간 통제 관리하고 처리 의견 답변 피드백을 동기화합니다.</p>
-            </div>
-
-            <div className="space-y-4">
-              {suggestions.length === 0 ? (
-                <div className="text-center py-20 bg-white border rounded-2xl text-slate-400 font-black text-xs">현재 상신된 내부 건의사항 보고 데이터가 없습니다.</div>
-              ) : (
-                suggestions.map((item) => (
-                  <div key={item.id} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-2xs space-y-4">
-                    <div className="flex flex-wrap justify-between items-center border-b pb-3 border-slate-100 gap-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs bg-slate-100 text-slate-700 px-2.5 py-1 rounded-md font-black">{item.authorName} ({item.authorRole})</span>
-                        <span className="text-[11px] text-slate-400 font-bold">보고일: {item.date}</span>
-                      </div>
-                      
-                      <div className="flex items-center gap-1.5 text-xs font-black">
-                        <button onClick={() => handleUpdateSuggestionStatus(item.id, "접수 대기")} className={`px-2 py-1 rounded border transition-all ${item.status === "접수 대기" ? "bg-amber-500 text-white border-amber-500" : "bg-white text-slate-400 hover:bg-slate-50"}`}>접수 대기</button>
-                        <button onClick={() => handleUpdateSuggestionStatus(item.id, "검토 중")} className={`px-2 py-1 rounded border transition-all ${item.status === "검토 중" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-400 hover:bg-slate-50"}`}>검토 중</button>
-                        <button onClick={() => handleUpdateSuggestionStatus(item.id, "조치 완료")} className={`px-2 py-1 rounded border transition-all ${item.status === "조치 완료" ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-slate-400 hover:bg-slate-50"}`}>조치 완료</button>
-                        <button onClick={() => handleDeleteSuggestion(item.id)} className="text-rose-600 bg-rose-50 border border-rose-100 px-2 py-1 rounded hover:bg-rose-100 ml-2">파기</button>
-                      </div>
-                    </div>
-
-                    <div className="bg-slate-50 p-4 border border-slate-100 rounded-xl text-xs font-bold text-slate-700 whitespace-pre-wrap leading-relaxed">
-                      {item.content}
-                    </div>
-
-                    <div className="bg-purple-50/50 border border-purple-100 p-4 rounded-xl space-y-3">
-                      <div className="text-xs font-black text-purple-900 flex items-center gap-1">
-                        <span>💬</span> 총괄 관제 센터 및 민석준 교사 처리 의견 피드백
-                      </div>
-                      {item.adminFeedback ? (
-                        <p className="text-xs font-bold bg-white p-3 border border-purple-200 rounded-lg text-purple-800 whitespace-pre-wrap leading-relaxed">{item.adminFeedback}</p>
-                      ) : (
-                        <p className="text-xs font-bold text-slate-400 italic pl-1">아직 등록된 공식 통제 피드백 의견이 없습니다.</p>
-                      )}
-                      
-                      <div className="flex gap-2">
-                        <input type="text" placeholder="검토 결과 및 조치 예정 세부 피드백 답변 기입..." value={adminFeedbackInputs[item.id] || ""} onChange={(e) => setAdminFeedbackInputs({ ...adminFeedbackInputs, [item.id]: e.target.value })} className="flex-1 bg-white border border-slate-200 px-3 py-2 rounded-xl text-xs font-bold focus:outline-none focus:border-purple-500" />
-                        <button onClick={() => handleSaveSuggestionFeedback(item.id)} className="bg-purple-700 hover:bg-purple-800 text-white font-black text-xs px-4 py-2 rounded-xl">답변 등록</button>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* 메뉴: 계정관리 */}
+        {/* 👑 메뉴 6: 계정 관리 및 전용 강제 원격 실시간 수정 (관리자 뷰) */}
         {currentMenu === "accountMgmt" && (currentUser.role === "관리자" || currentUser.id === "민석준") && (
           <div className="space-y-6">
-            <div className="bg-white border p-6 rounded-2xl shadow-xs space-y-4 max-w-3xl">
-              <h3 className="font-black text-sm text-slate-900 border-b pb-2">➕ 신규 교직원 접속 계정 강제 수동 발급</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-xs font-bold">
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 mb-1">사용자 고유 계정 ID</label>
-                  <input type="text" placeholder="예: 박교사302" value={newAccId} onChange={(e) => setNewAccId(e.target.value)} className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500" />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 mb-1">교직원 실명</label>
-                  <input type="text" placeholder="홍길동" value={newAccName} onChange={(e) => setNewAccName(e.target.value)} className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500" />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 mb-1">보안 접속 패스워드</label>
-                  <input type="text" placeholder="기본 비밀번호" value={newAccPw} onChange={(e) => setNewAccPw(e.target.value)} className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500" />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 mb-1">교직원 역할 직책</label>
-                  <select value={newAccRole} onChange={(e) => setNewAccRole(e.target.value as any)} className="w-full px-3 py-2 border bg-white rounded-lg focus:outline-none focus:border-blue-500">
-                    <option value="학급담임">학급담임 (원반교사)</option>
-                    <option value="특수담임">특수담임 (도움실)</option>
-                    <option value="학년부장">학년부장 (학년부)</option>
-                    <option value="관리자">최고 권한 관리자</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 mb-1">관제 담당 학반 코드</label>
-                  <input type="text" placeholder="예: 2-1 (또는 전체)" value={newAccClass} onChange={(e) => setNewAccClass(e.target.value)} className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500" />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 mb-1">담당 세부 교육 교과</label>
-                  <input type="text" placeholder="예: 일반사회" value={newAccSubj} onChange={(e) => setNewAccSubj(e.target.value)} className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500" />
-                </div>
-              </div>
-              <div className="text-right">
-                <button onClick={handleCreateAccountAdmin} className="bg-purple-600 hover:bg-purple-700 text-white font-black text-xs px-5 py-2 rounded-xl shadow-xs">💾 신규 계정 마스터 DB 마운트</button>
-              </div>
-            </div>
-
+            
+            {/* 실시간 정보 강제 원격 수정 오퍼레이션 탑재 */}
             {editingAccountId && (
-              <div className="bg-purple-900 text-white p-6 rounded-2xl shadow-md max-w-3xl space-y-4">
-                <h3 className="font-black text-sm text-purple-200">🛠️ 원격 계정 실시간 마스터 편집 수동 변경 제어판 (대상 ID: {editingAccountId})</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-xs font-bold text-slate-900">
+              <div className="bg-amber-50 border-2 border-amber-300 p-6 rounded-2xl shadow-md space-y-4 animate-fadeIn">
+                <h3 className="font-black text-sm text-amber-800 flex items-center gap-2">
+                  ⚙️ [원격 실시간 제어] 계정 마스터 레코드 강제 변조 모드 (대상: {editingAccountId})
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-xs font-bold">
                   <div>
-                    <label className="block text-[10px] font-black text-purple-200 mb-1">수정 교사 성명</label>
-                    <input type="text" value={editAccName} onChange={(e) => setEditAccName(e.target.value)} className="w-full px-3 py-2 bg-white rounded-lg" />
+                    <label className="block text-amber-900 mb-1">교사 성명 수정</label>
+                    <input type="text" value={editAccName} onChange={(e) => setEditAccName(e.target.value)} className="w-full px-3 py-2 bg-white border border-amber-300 rounded-xl" />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-black text-purple-200 mb-1">강제 강등/승격 직책 변경</label>
-                    <select value={editAccRole} onChange={(e) => setEditAccRole(e.target.value as any)} className="w-full px-3 py-2 bg-white rounded-lg">
+                    <label className="block text-amber-900 mb-1">권한 및 등급 수정</label>
+                    <select value={editAccRole} onChange={(e) => setEditAccRole(e.target.value as any)} className="w-full px-3 py-2 bg-white border border-amber-300 rounded-xl">
                       <option value="학급담임">학급담임</option>
-                      <option value="특수담임">특수담임</option>
                       <option value="학년부장">학년부장</option>
-                      <option value="관리자">최고 권한 관리자</option>
+                      <option value="특수담임">특수담임</option>
+                      <option value="관리자">최고 관리자</option>
                     </select>
                   </div>
                   <div>
-                    <label className="block text-[10px] font-black text-purple-200 mb-1">관제 대상 학반 재배정</label>
-                    <input type="text" value={editAccClass} onChange={(e) => setEditAccClass(e.target.value)} className="w-full px-3 py-2 bg-white rounded-lg" />
+                    <label className="block text-amber-900 mb-1">담당 학급 반 스위칭</label>
+                    <input type="text" value={editAccClass} onChange={(e) => setEditAccClass(e.target.value)} className="w-full px-3 py-2 bg-white border border-amber-300 rounded-xl" />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-black text-purple-200 mb-1">접속 비밀번호 강제 오버라이드</label>
-                    <input type="text" value={editAccPw} onChange={(e) => setEditAccPw(e.target.value)} className="w-full px-3 py-2 bg-white rounded-lg" />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-black text-purple-200 mb-1">교육 교과 수정</label>
-                    <input type="text" value={editAccSubj} onChange={(e) => setEditAccSubj(e.target.value)} className="w-full px-3 py-2 bg-white rounded-lg" />
+                    <label className="block text-amber-900 mb-1">비밀번호 강제 변경</label>
+                    <input type="text" value={editAccPw} onChange={(e) => setEditAccPw(e.target.value)} className="w-full px-3 py-2 bg-white border border-amber-300 rounded-xl" />
                   </div>
                 </div>
-                <div className="text-right flex justify-end gap-2">
-                  <button onClick={() => setEditingAccountId(null)} className="bg-slate-700 text-white px-4 py-1.5 text-xs font-bold rounded-lg">변경 취소</button>
-                  <button onClick={handleSaveEditAccount} className="bg-emerald-600 text-white px-4 py-1.5 text-xs font-black rounded-lg">완벽 동기화 저장</button>
+                <div className="text-right space-x-2 pt-2">
+                  <button onClick={() => setEditingAccountId(null)} className="bg-slate-300 text-slate-700 text-xs font-bold px-4 py-2 rounded-xl">원격 수정 취소</button>
+                  <button onClick={handleSaveEditAccount} className="bg-amber-600 text-white text-xs font-black px-5 py-2 rounded-xl shadow-xs">마스터 레코드 원격 강제 저장</button>
                 </div>
               </div>
             )}
 
-            <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="bg-slate-50 border-b font-black text-slate-500">
-                    <th className="p-4 pl-6">계정교사 고유 ID</th>
-                    <th className="p-4">교사성명</th>
-                    <th className="p-4">권한직책</th>
-                    <th className="p-4">담당학반</th>
-                    <th className="p-4">인증암호</th>
-                    <th className="p-4">교과</th>
-                    <th className="p-4 text-center">동기화 관리</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y font-bold text-slate-700">
-                  {accounts.map((a) => (
-                    <tr key={a.id} className="hover:bg-slate-50/80">
-                      <td className="p-4 pl-6 text-purple-600 font-mono font-black">{a.id}</td>
-                      <td className="p-4 text-slate-900 font-black">{a.name}</td>
-                      <td className="p-4">
-                        <span className={`px-2 py-0.5 rounded text-[10px] ${a.role === '관리자' ? 'bg-rose-100 text-rose-700' : a.role === '특수담임' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600'}`}>{a.role}</span>
-                      </td>
-                      <td className="p-4 text-blue-600">{a.targetClass}</td>
-                      <td className="p-4 font-mono text-slate-400">{a.password}</td>
-                      <td className="p-4 text-slate-500">{a.subject || "-"}</td>
-                      <td className="p-4 text-center space-x-1">
-                        <button onClick={() => startEditAccount(a)} className="bg-slate-100 border text-slate-700 font-black px-2 py-1 rounded hover:bg-slate-200">편집</button>
-                        <button onClick={() => handleDeleteAccountAdmin(a.id, a.name)} className="bg-rose-50 text-rose-600 border border-rose-100 px-2 py-1 rounded hover:bg-rose-100">파기</button>
-                      </td>
+            {/* 신규 계정 생성 서브 보드 */}
+            <div className="bg-white border p-6 rounded-2xl shadow-xs space-y-4">
+              <h3 className="font-black text-sm text-purple-700">🔒 신규 교직원 접속 계정 포털 생성 발급</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-xs font-bold">
+                <div>
+                  <label className="block text-slate-500 mb-1">로그인용 계정 ID 기입 (이름+학반 권장)</label>
+                  <input type="text" placeholder="예: 김대홍201" value={newAccId} onChange={(e) => setNewAccId(e.target.value)} className="w-full px-3 py-2 border rounded-xl" />
+                </div>
+                <div>
+                  <label className="block text-slate-500 mb-1">교사 성함</label>
+                  <input type="text" placeholder="홍길동" value={newAccName} onChange={(e) => setNewAccName(e.target.value)} className="w-full px-3 py-2 border rounded-xl" />
+                </div>
+                <div>
+                  <label className="block text-slate-500 mb-1">직책 권한 등급</label>
+                  <select value={newAccRole} onChange={(e) => setNewAccRole(e.target.value as any)} className="w-full px-3 py-2 border bg-white rounded-xl">
+                    <option value="학급담임">학급담임 (본인 학반만 모니터)</option>
+                    <option value="학년부장">학년부장 (전체 조회/본인 반 인계)</option>
+                    <option value="특수담임">특수담임 (마스터 운영제어)</option>
+                    <option value="관리자">관리자 시스템 루트 권한</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-slate-500 mb-1">배정 담당 학급 (예: 2-4)</label>
+                  <input type="text" placeholder="2-1" value={newAccClass} onChange={(e) => setNewAccClass(e.target.value)} className="w-full px-3 py-2 border rounded-xl" />
+                </div>
+                <div>
+                  <label className="block text-slate-500 mb-1">초기 패스워드 포맷</label>
+                  <input type="text" value={newAccPw} onChange={(e) => setNewAccPw(e.target.value)} className="w-full px-3 py-2 border rounded-xl" />
+                </div>
+                <div>
+                  <label className="block text-slate-500 mb-1">담당 교과</label>
+                  <input type="text" placeholder="원반과목" value={newAccSubj} onChange={(e) => setNewAccSubj(e.target.value)} className="w-full px-3 py-2 border rounded-xl" />
+                </div>
+              </div>
+              <div className="text-right">
+                <button onClick={handleCreateAccountAdmin} className="bg-purple-600 text-white font-black text-xs px-5 py-3 rounded-xl">+ 새 마스터 권한 계정 즉시 발급</button>
+              </div>
+            </div>
+
+            {/* 계정 관리 종합 테이블 리스트 */}
+            <div className="bg-white border rounded-2xl shadow-xs overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs font-bold">
+                  <thead>
+                    <tr className="bg-slate-100 border-b text-slate-500">
+                      <th className="p-3 pl-6">계정 ID</th>
+                      <th className="p-3">성명</th>
+                      <th className="p-3">권한 등급</th>
+                      <th className="p-3">담당 학반</th>
+                      <th className="p-3">비밀번호</th>
+                      <th className="p-3">담당 과목</th>
+                      <th className="p-3 text-center">원격 제어</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-slate-700">
+                    {accounts.map((a) => (
+                      <tr key={a.id} className="hover:bg-slate-50">
+                        <td className="p-3 pl-6 text-[#2563EB] font-mono">{a.id}</td>
+                        <td className="p-3 text-slate-900 font-black">{a.name}</td>
+                        <td className="p-3"><span className="px-2 py-0.5 rounded text-[10px] bg-slate-100 text-slate-600">{a.role}</span></td>
+                        <td className="p-3 text-slate-500">{a.targetClass}</td>
+                        <td className="p-3 text-slate-600 font-mono">{a.password}</td>
+                        <td className="p-3 text-slate-400">{a.subject || "미정"}</td>
+                        <td className="p-3 text-center space-x-2">
+                          <button onClick={() => startEditAccount(a)} className="bg-amber-100 text-amber-700 px-2 py-1 rounded text-[11px] hover:bg-amber-200 transition-all">조회/수정</button>
+                          <button onClick={() => handleDeleteAccountAdmin(a.id, a.name)} className="bg-rose-50 text-rose-600 px-2 py-1 rounded text-[11px] hover:bg-rose-100 transition-all">파기</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
 
-        {/* 메뉴: 감사로그 */}
+        {/* 메뉴 7: 로그 감사 */}
         {currentMenu === "logMgmt" && (currentUser.role === "관리자" || currentUser.id === "민석준") && (
-          <div className="space-y-4 max-w-4xl">
-            <div className="bg-white border p-5 rounded-2xl shadow-xs flex justify-between items-center">
-              <div>
-                <h3 className="font-black text-sm text-slate-900">📋 망 내 행위 실시간 원격 보안 감사 아카이브</h3>
-                <p className="text-[11px] text-slate-400 font-bold mt-0.5">교직원들의 로그인, 아웃, 인계 및 안건 상신 등 마스터 코어 조작 행위를 시간순 영구 기록합니다.</p>
-              </div>
-              <button onClick={() => { if(confirm("감사 아카이브를 백업 없이 완전 초기화합니까?")) { setLogs([]); localStorage.removeItem("zh_logs"); } }} className="bg-rose-50 border border-rose-200 text-rose-600 font-black text-xs px-4 py-2 rounded-xl hover:bg-rose-100">🧹 영구 청소</button>
+          <div className="bg-white border rounded-2xl p-6 space-y-4 shadow-xs">
+            <div className="flex justify-between items-center border-b pb-2">
+              <h3 className="font-black text-sm text-slate-900">📑 시스템 가동 오퍼레이션 감사 추적 로그</h3>
+              <button onClick={() => { if(confirm("로그를 비우십니까?")){ setLogs([]); localStorage.removeItem("zh_logs"); } }} className="text-xs bg-slate-100 px-3 py-1.5 rounded-xl font-bold">전체 포맷 파기</button>
             </div>
-            <div className="bg-slate-900 text-slate-200 p-4 rounded-2xl font-mono text-xs max-h-[550px] overflow-y-auto space-y-1.5 shadow-md">
-              {logs.length === 0 ? (
-                <div className="text-slate-500 text-center py-8 italic">현재 통제 장치에 트래킹된 감사 로그 데이터가 존재하지 않습니다.</div>
-              ) : (
-                logs.map((l) => (
-                  <div key={l.id} className="border-b border-slate-800/80 pb-1 flex gap-2">
-                    <span className="text-[#2563EB] font-black">[{l.time}]</span>
-                    <span className="text-emerald-400 font-bold">[{l.user}]</span>
-                    <span className="text-slate-300 font-semibold">{l.action}</span>
-                  </div>
-                ))
-              )}
+            <div className="bg-slate-900 text-emerald-400 p-4 rounded-xl h-96 overflow-y-auto font-mono text-[11px] space-y-1">
+              {logs.map((l) => (
+                <div key={l.id}>[{l.time}] <span className="text-amber-300 font-bold">{l.user}</span>: {l.action}</div>
+              ))}
             </div>
           </div>
         )}
       </main>
 
-      {/* 🔍 시간표 디테일 모달 컴포넌트 */}
+      {/* 💡 대시보드 카드 클릭 시 활성화되는 일과 타임라인 모달 팝업 */}
       {selectedStudent && currentMenu === "dashboard" && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-white rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl border border-slate-100 animate-scale-up">
-            <div className="bg-slate-900 p-6 text-white flex justify-between items-center">
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="bg-gradient-to-r from-[#2563EB] to-[#1E40AF] p-6 text-white flex justify-between items-center">
               <div>
-                <span className="text-xs font-black text-blue-400 tracking-wider block uppercase">{selectedStudent.gradeClass} 명단 통합 타임라인</span>
-                <h3 className="text-xl font-black">{selectedStudent.name} 학생 실시간 시간표</h3>
+                <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded font-black">STUDENT TIMELINE</span>
+                <h3 className="text-xl font-black mt-1">{selectedStudent.name} ({selectedStudent.id}) 전체 일과표</h3>
               </div>
-              <button onClick={() => setSelectedStudent(null)} className="text-slate-400 hover:text-white font-black text-lg p-2 bg-slate-800 rounded-full w-9 h-9 flex items-center justify-center transition-all">✕</button>
+              <button onClick={() => setSelectedStudent(null)} className="text-white bg-white/10 w-8 h-8 rounded-full font-bold">✕</button>
             </div>
-
-            <div className="p-6 space-y-4">
-              <div className="bg-slate-50 p-4 border border-slate-100 rounded-2xl flex justify-between text-xs font-bold">
-                <div><span className="text-slate-400">교실 소속반:</span> <span className="text-slate-900 font-black">{selectedStudent.gradeClass} ({selectedStudent.homeroom} 담임)</span></div>
-                <div><span className="text-slate-400">학번코드:</span> <span className="text-purple-600 font-mono">{selectedStudent.id}</span></div>
-              </div>
-
-              <div className="border rounded-2xl overflow-hidden max-h-72 overflow-y-auto">
-                <table className="w-full text-left border-collapse text-xs">
+            <div className="p-6 overflow-y-auto">
+              <div className="border rounded-2xl overflow-hidden">
+                <table className="w-full text-left text-xs border-collapse">
                   <thead>
-                    <tr className="bg-slate-50 border-b border-slate-200 font-black text-slate-500">
-                      <th className="p-3 pl-4">교시</th>
-                      <th className="p-3">수업 교과</th>
-                      <th className="p-3">교사</th>
-                      <th className="p-3">학습 위치</th>
+                    <tr className="bg-slate-50 border-b font-black text-slate-500">
+                      <th className="p-3 pl-4">교시 시간</th>
+                      <th className="p-3">교과목명</th>
+                      <th className="p-3">담당교사</th>
+                      <th className="p-3">학습이동장소</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y font-bold text-slate-700">
+                  <tbody className="divide-y divide-slate-100 font-bold text-slate-700">
                     {(sheetSchedules[selectedStudent.id]?.timeline || [
                       { period: "1교시 (08:40)", subject: "지정 시간표 없음", teacher: "-", location: "원반 대기" },
                       { period: "2교시 (09:40)", subject: "지정 시간표 없음", teacher: "-", location: "원반 대기" },
@@ -1172,8 +1010,8 @@ export default function IntegratedTeacherPortal() {
                 </table>
               </div>
             </div>
-            <div className="p-4 bg-slate-50 border-t text-right">
-              <button onClick={() => setSelectedStudent(null)} className="bg-slate-900 text-white text-xs font-black px-6 py-2 rounded-xl">창 닫기</button>
+            <div className="p-4 bg-slate-50 text-right border-t">
+              <button onClick={() => setSelectedStudent(null)} className="bg-slate-800 text-white font-black text-xs px-5 py-2.5 rounded-xl">대화상자 닫기</button>
             </div>
           </div>
         </div>
